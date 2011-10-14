@@ -325,9 +325,6 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	 */
 	platform_secondary_init(cpu);
 
-	/*
-	 * Enable local interrupts.
-	 */
 	notify_cpu_starting(cpu);
 	local_irq_enable();
 	local_fiq_enable();
@@ -351,6 +348,13 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 		cpu_relax();
 
 	printk(KERN_INFO"CPU1 is up\n");
+
+	/*
+	 * cpu_active bit is set, so it's safe to enalbe interrupts
+	 * now.
+	 */
+	local_irq_enable();
+	local_fiq_enable();
 
 	/*
 	 * OK, it's off to the idle thread for us
