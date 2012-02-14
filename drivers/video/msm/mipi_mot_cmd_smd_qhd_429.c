@@ -618,7 +618,7 @@ static void enable_acl(struct msm_fb_data_type *mfd)
 		mipi_mot_mipi_busy_wait(mfd);
 		mipi_set_tx_power_mode(0);
 		ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
-		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, acl_enable_disable,
+		mipi_dsi_cmds_tx(dsi_tx_buf, acl_enable_disable,
 					ARRAY_SIZE(acl_enable_disable));
 		mutex_unlock(&mfd->dma->ov_mutex);
 	}
@@ -711,7 +711,7 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 		idx = NUMBER_BRIGHTNESS_LEVELS - 1;
 
 	dsi_tx_buf = mot_panel->mot_tx_buf;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_1,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_1,
 			ARRAY_SIZE(smd_qhd_429_cmds_1));
 
 	/* Read D4h for elvss and apply gamma */
@@ -719,12 +719,12 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 
 	/* gamma */
 	smd_qhd_429_cmds_2[0].payload = getGamma(idx);
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_2,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_2,
 			ARRAY_SIZE(smd_qhd_429_cmds_2));
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_3,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_3,
 			ARRAY_SIZE(smd_qhd_429_cmds_3));
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_4,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_4,
 			ARRAY_SIZE(smd_qhd_429_cmds_4));
 
 	/* elvss */
@@ -735,16 +735,16 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 		for (i = 1; i < 5; i++)
 			elvss_output_set[i] = elvss_value + 0xF;
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, elvss_set_cmd,
+	mipi_dsi_cmds_tx(dsi_tx_buf, elvss_set_cmd,
 		ARRAY_SIZE(elvss_set_cmd));
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_5,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_5,
 			ARRAY_SIZE(smd_qhd_429_cmds_5));
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_6,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_6,
 			ARRAY_SIZE(smd_qhd_429_cmds_6));
 	/* acl */
 	ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, smd_qhd_429_cmds_7,
+	mipi_dsi_cmds_tx(dsi_tx_buf, smd_qhd_429_cmds_7,
 			ARRAY_SIZE(smd_qhd_429_cmds_7));
 
 	return 0;
@@ -760,7 +760,7 @@ static int panel_disable(struct msm_fb_data_type *mfd)
 	}
 
 	dsi_tx_buf =  mot_panel->mot_tx_buf;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, display_off_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, display_off_cmds,
 			ARRAY_SIZE(display_off_cmds));
 
 	return 0;
@@ -814,7 +814,7 @@ static void panel_set_backlight(struct msm_fb_data_type *mfd)
 	mipi_mot_mipi_busy_wait(mfd);
 
 	mipi_set_tx_power_mode(0);
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, set_brightness_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, set_brightness_cmds,
 			ARRAY_SIZE(set_brightness_cmds));
 
 	bl_level_old = mfd->bl_level;

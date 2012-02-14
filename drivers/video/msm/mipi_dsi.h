@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,7 +51,8 @@
 #define MIPI_DSI_PANEL_QHD_PT 5
 #define MIPI_DSI_PANEL_WXGA	6
 #define MIPI_DSI_PANEL_HD	7
-#define MIPI_DSI_PANEL_WUXGA	8
+#define MIPI_DSI_PANEL_WUXGA	7
+#define MIPI_DSI_PANEL_720P_PT	8
 #define DSI_PANEL_MAX	8
 
 enum {		/* mipi dsi panel */
@@ -126,6 +127,7 @@ enum dsi_trigger_type {
 extern struct device dsi_dev;
 extern int mipi_dsi_clk_on;
 extern u32 dsi_irq;
+extern u32 esc_byte_ratio;
 
 extern void  __iomem *periph_base;
 extern char *mmss_cc_base;	/* mutimedia sub system clock control */
@@ -263,8 +265,7 @@ void mipi_dsi_lane_cfg(void);
 void mipi_dsi_bist_ctrl(void);
 int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
 int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
-int mipi_dsi_cmds_tx(struct msm_fb_data_type *mfd,
-		struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
+int mipi_dsi_cmds_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
 
 int mipi_dsi_cmd_dma_tx(struct dsi_buf *dp);
 int mipi_dsi_cmd_reg_tx(uint32 data);
@@ -277,10 +278,14 @@ void mipi_dsi_op_mode_config(int mode);
 void mipi_dsi_cmd_mode_ctrl(int enable);
 void mdp4_dsi_cmd_trigger(void);
 void mipi_dsi_cmd_mdp_start(void);
+int mipi_dsi_ctrl_lock(int mdp);
+int mipi_dsi_ctrl_lock_query(void);
 void mipi_dsi_cmd_bta_sw_trigger(void);
 void mipi_dsi_ack_err_status(void);
 void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd);
 void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd);
+void mipi_dsi_set_backlight(struct msm_fb_data_type *mfd, int level);
+void mipi_dsi_cmd_backlight_tx(int level);
 void mipi_dsi_clk_enable(void);
 void mipi_dsi_clk_disable(void);
 void mipi_dsi_pre_kickoff_action(void);
@@ -317,6 +322,7 @@ void cont_splash_clk_ctrl(int enable);
 void mipi_dsi_turn_on_clks(void);
 void mipi_dsi_turn_off_clks(void);
 int mipi_dsi_get_dsi_status(void);
+void mipi_dsi_clk_cfg(int on);
 
 void mipi_dsi_regs_dump(void);
 void mipi_dsi_clear_dump_flag(void);
