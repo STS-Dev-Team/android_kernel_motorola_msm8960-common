@@ -860,12 +860,6 @@ static struct dsi_cmd_desc mot_video_on_cmds1[] = {
 			sizeof(exit_sleep), exit_sleep},
 };
 
-static struct dsi_cmd_desc mot_acl_enable_disable[] = {
-	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(ACL_enable_disable_settings),
-					ACL_enable_disable_settings}
-};
-
 static struct dsi_cmd_desc mot_video_on_cmds2_1[] = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
 		sizeof(panel_condition_set_0to18), panel_condition_set_0to18},
@@ -932,19 +926,6 @@ static struct dsi_cmd_desc mot_display_off_cmds[] = {
 
 static void enable_acl(struct msm_fb_data_type *mfd)
 {
-	struct dsi_buf *dsi_tx_buf;
-	/* Write the value only if the display is enable and powerd on */
-	if ((mfd->op_enable != 0) && (mfd->panel_power_on != 0)) {
-		dsi_tx_buf = mot_panel->mot_tx_buf;
-		mutex_lock(&mfd->dma->ov_mutex);
-		mdp4_dsi_cmd_dma_busy_wait(mfd);
-		mdp4_dsi_blt_dmap_busy_wait(mfd);
-		mipi_set_tx_power_mode(0);
-		ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
-		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_acl_enable_disable,
-					ARRAY_SIZE(mot_acl_enable_disable));
-		mutex_unlock(&mfd->dma->ov_mutex);
-	}
 }
 
 #define RETRY_MAX_CNT 15
@@ -977,7 +958,7 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 
 	dsi_tx_buf = mot_panel->mot_tx_buf;
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds1,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds1,
 					ARRAY_SIZE(mot_video_on_cmds1));
 
 	mdelay(20);
@@ -1013,31 +994,31 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 	mipi_mot_read_byte(mfd, 0xdc, &id_regs[2]);
 
 	ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_1,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_1,
 					ARRAY_SIZE(mot_video_on_cmds2_1));
 
 	/* Set backlight */
 
 	mot_video_on_cmds2_2[0].payload = getGamma(idx);
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_2,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_2,
 					ARRAY_SIZE(mot_video_on_cmds2_2));
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_3,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_3,
 					ARRAY_SIZE(mot_video_on_cmds2_3));
 
 	mot_video_on_cmds2_pwr_ctrl[0].payload = getPwrCtrl();
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_pwr_ctrl,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_pwr_ctrl,
 					ARRAY_SIZE(mot_video_on_cmds2_pwr_ctrl));
 
 	mot_video_on_cmds2_elvss[0].payload = getElvssForGamma(idx);
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_elvss,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_elvss,
 					ARRAY_SIZE(mot_video_on_cmds2_elvss));
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2_acl,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds2_acl,
 					ARRAY_SIZE(mot_video_on_cmds2_acl));
 	mdelay(120);
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds3,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_video_on_cmds3,
 					ARRAY_SIZE(mot_video_on_cmds3));
 
 	mdelay(5);
@@ -1056,7 +1037,7 @@ static int panel_disable(struct msm_fb_data_type *mfd)
 
 	dsi_tx_buf =  mot_panel->mot_tx_buf;
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_display_off_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_display_off_cmds,
 					ARRAY_SIZE(mot_display_off_cmds));
 
 	return 0;
@@ -1095,11 +1076,10 @@ static void panel_set_backlight(struct msm_fb_data_type *mfd)
 			(unsigned int)(*(mot_set_brightness_cmds[2].payload)));
 
 	mutex_lock(&mfd->dma->ov_mutex);
-	mdp4_dsi_cmd_dma_busy_wait(mfd);
-	mdp4_dsi_blt_dmap_busy_wait(mfd);
+
 
 	mipi_set_tx_power_mode(0);
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_set_brightness_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_set_brightness_cmds,
 					ARRAY_SIZE(mot_set_brightness_cmds));
 
 	bl_level_old = mfd->bl_level;

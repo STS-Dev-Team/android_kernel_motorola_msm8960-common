@@ -412,7 +412,6 @@ static int mot_panel_off_reboot(struct notifier_block *nb,
 		mutex_lock(&mfd->dma->ov_mutex);
 
 		atomic_set(&mot_panel->state, MOT_PANEL_OFF);
-		mipi_mot_mipi_busy_wait(mfd);
 		if (mot_panel->panel_disable)
 			mot_panel->panel_disable(mfd);
 

@@ -55,9 +55,8 @@ int mipi_mot_panel_on(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *tp = mot_panel->mot_tx_buf;
 
-	mipi_mot_mipi_busy_wait(mfd);
 	mipi_dsi_buf_init(tp);
-	mipi_dsi_cmds_tx(mfd, tp, &mot_display_on_cmd, 1);
+	mipi_dsi_cmds_tx(tp, &mot_display_on_cmd, 1);
 
 	return 0;
 }
@@ -66,9 +65,8 @@ int mipi_mot_panel_off(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *tp = mot_panel->mot_tx_buf;
 
-	mipi_mot_mipi_busy_wait(mfd);
 	mipi_dsi_buf_init(tp);
-	mipi_dsi_cmds_tx(mfd, tp, &mot_display_off_cmd, 1);
+	mipi_dsi_cmds_tx(tp, &mot_display_off_cmd, 1);
 
 	return 0;
 }
@@ -196,23 +194,6 @@ end:
 	return 0;
 }
 
-void mipi_mot_mipi_busy_wait(struct msm_fb_data_type *mfd)
-{
-	/* Todo: consider to remove mdp4_dsi_cmd_dma_busy_wait
-	 * mipi_dsi_cmds_tx/rx wait for dma completion already.
-	 */
-	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
-		mdp4_dsi_cmd_dma_busy_wait(mfd);
-		mipi_dsi_mdp_busy_wait(mfd);
-		mdp4_dsi_blt_dmap_busy_wait(mfd);
-	} else if (mfd->panel_info.type == MIPI_VIDEO_PANEL) {
-		mdp4_overlay_dsi_video_wait4event(mfd, INTR_PRIMARY_VSYNC);
-		mdp4_dsi_cmd_dma_busy_wait(mfd);
-		mdp4_dsi_blt_dmap_busy_wait(mfd);
-	}
-
-}
-
 static int mipi_read_cmd_locked(struct msm_fb_data_type *mfd,
 					struct dsi_cmd_desc *cmd, u8 *rd_data)
 {
@@ -224,7 +205,6 @@ static int mipi_read_cmd_locked(struct msm_fb_data_type *mfd,
 		goto panel_off_ret;
 	} else {
 		mipi_set_tx_power_mode(0);
-		mipi_mot_mipi_busy_wait(mfd);
 		/* For video mode panel, after INTR_PRIMARY_VSYNC happened,
 		 * only have 5H(VSA+VBP) left for blanking period, might not
 		 * have enough time to complete read command. Want to

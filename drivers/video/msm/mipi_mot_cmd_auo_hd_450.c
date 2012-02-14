@@ -67,7 +67,7 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 	}
 
 	dsi_tx_buf = mot_panel->mot_tx_buf;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_on_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_cmd_on_cmds,
 					ARRAY_SIZE(mot_cmd_on_cmds));
 
 	return 0;
@@ -84,7 +84,7 @@ static int panel_disable(struct msm_fb_data_type *mfd)
 
 	dsi_tx_buf =  mot_panel->mot_tx_buf;
 
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_display_off_cmds,
+	mipi_dsi_cmds_tx(dsi_tx_buf, mot_display_off_cmds,
 					ARRAY_SIZE(mot_display_off_cmds));
 
 	return 0;
