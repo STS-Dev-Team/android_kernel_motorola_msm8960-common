@@ -795,4 +795,11 @@ void mdp4_regs_dump(void);
 void mdp4_hang_panic(void);
 void mdp4_clear_dump_flags(void);
 
+int mdp4_v4l2_overlay_set(struct fb_info *info, struct mdp_overlay *req,
+		struct mdp4_overlay_pipe **ppipe);
+void mdp4_v4l2_overlay_clear(struct mdp4_overlay_pipe *pipe);
+int mdp4_v4l2_overlay_play(struct fb_info *info, struct mdp4_overlay_pipe *pipe,
+	unsigned long srcp0_addr, unsigned long srcp1_addr,
+	unsigned long srcp2_addr);
+
 #endif /* MDP_H */
