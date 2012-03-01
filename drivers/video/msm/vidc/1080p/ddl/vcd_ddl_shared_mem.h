@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -174,6 +174,8 @@ void vidc_sm_set_decoder_sei_enable(struct ddl_buf_addr *shared_mem,
 	u32 sei_enable);
 void vidc_sm_get_decoder_sei_enable(struct ddl_buf_addr *shared_mem,
 	u32 *sei_enable);
+void vidc_sm_set_error_concealment_config(struct ddl_buf_addr *shared_mem,
+	u32 inter_slice, u32 intra_slice, u32 conceal_config_enable);
 void vidc_sm_set_decoder_stuff_bytes_consumption(
 	struct ddl_buf_addr *shared_mem,
 	enum vidc_sm_num_stuff_bytes_consume_info consume_info);
@@ -191,5 +193,4 @@ void vidc_sm_set_encoder_batch_config(struct ddl_buf_addr *shared_mem,
         u32 output_buffer_size);
 void vidc_sm_get_encoder_batch_output_size(struct ddl_buf_addr *shared_mem,
         u32 *output_buffer_size);
-
 #endif
