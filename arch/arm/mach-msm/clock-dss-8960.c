@@ -528,11 +528,6 @@ int hdmi_pll_set_rate(unsigned rate)
 		writel_relaxed(0x53, HDMI_PHY_PLL_VCOCAL_CFG0);
 		writel_relaxed(0x02, HDMI_PHY_PLL_VCOCAL_CFG1);
 		writel_relaxed(0x3b, HDMI_PHY_PLL_VCOCAL_CFG2);
-		writel_relaxed(0x00, HDMI_PHY_PLL_VCOCAL_CFG3);
-		writel_relaxed(0x86, HDMI_PHY_PLL_VCOCAL_CFG4);
-		writel_relaxed(0x00, HDMI_PHY_PLL_VCOCAL_CFG5);
-		writel_relaxed(0x33, HDMI_PHY_PLL_VCOCAL_CFG6);
-		writel_relaxed(0x00, HDMI_PHY_PLL_VCOCAL_CFG7);
 	break;
 	}
 
