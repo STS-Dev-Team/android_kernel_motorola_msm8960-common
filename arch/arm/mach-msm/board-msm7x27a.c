@@ -175,8 +175,6 @@ static struct msm_i2c_platform_data msm_gsbi1_qup_i2c_pdata = {
 #define MSM8x25_MSM_FB_SIZE	0x3FC000
 #endif
 
-#endif
-
 #ifdef CONFIG_ION_MSM
 #define MSM_ION_HEAP_NUM        4
 static struct platform_device ion_dev;
@@ -1048,7 +1046,7 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 
 	if (machine_is_msm7625a_surf() || machine_is_msm7625a_ffa())
 		fb_size = MSM7x25A_MSM_FB_SIZE;
-	else if (machine_is_msm7627a_evb())
+	else if (machine_is_msm7627a_evb() || machine_is_msm8625_evb())
 		fb_size = MSM8x25_MSM_FB_SIZE;
 	else
 		fb_size = MSM_FB_SIZE;
