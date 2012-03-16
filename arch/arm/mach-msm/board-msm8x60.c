@@ -9818,6 +9818,8 @@ static void __init msm_fb_add_devices(void)
  */
 static void set_mdp_clocks_for_wuxga(void)
 {
+	int i;
+
 	mdp_sd_smi_vectors[0].ab = 2000000000;
 	mdp_sd_smi_vectors[0].ib = 2000000000;
 	mdp_sd_smi_vectors[1].ab = 2000000000;
@@ -9843,7 +9845,10 @@ static void set_mdp_clocks_for_wuxga(void)
 	mdp_1080p_vectors[1].ab = 2000000000;
 	mdp_1080p_vectors[1].ib = 2000000000;
 
-	mdp_pdata.mdp_max_clk = 200000000;
+	mdp_pdata.mdp_core_clk_rate = 200000000;
+
+	for (i = 0; i < ARRAY_SIZE(mdp_core_clk_rate_table); i++)
+		mdp_core_clk_rate_table[i] = 200000000;
 }
 
 #if (defined(CONFIG_MARIMBA_CORE)) && \
