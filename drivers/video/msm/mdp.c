@@ -2380,6 +2380,8 @@ static int mdp_probe(struct platform_device *pdev)
 			rc = -ENODEV;
 			goto mdp_probe_err;
 		}
+		INIT_WORK(&mfd->dma_update_worker,
+			mdp_lcd_update_workqueue_handler);
 #endif
 		mfd->reg_write = mipi_reg_write;
 		mfd->reg_read = mipi_reg_read;
