@@ -197,12 +197,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
 
-	mipi  = &mfd->panel_info.mipi;
-	/* Clean up the force clk lane to enter HS from previous boot */
-	if ((mfd->panel_info.type == MIPI_VIDEO_PANEL) &&
-							mipi->force_clk_lane_hs)
-		MIPI_OUTP(MIPI_DSI_BASE + 0x00a8, 0);
-
 	mipi_dsi_phy_ctrl(1);
 
 	if (mdp_rev == MDP_REV_42 && mipi_dsi_pdata)
@@ -210,7 +204,9 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	mipi_dsi_phy_init(0, &(mfd->panel_info), target_type);
 
+	local_bh_disable();
 	mipi_dsi_clk_enable();
+	local_bh_enable();
 
 	MIPI_OUTP(MIPI_DSI_BASE + 0x114, 1);
 	MIPI_OUTP(MIPI_DSI_BASE + 0x114, 0);
@@ -224,6 +220,7 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	width = mfd->panel_info.xres;
 	height = mfd->panel_info.yres;
 
+	mipi  = &mfd->panel_info.mipi;
 	if (mfd->panel_info.type == MIPI_VIDEO_PANEL) {
 		dummy_xres = mfd->panel_info.mipi.xres_pad;
 		dummy_yres = mfd->panel_info.mipi.yres_pad;
