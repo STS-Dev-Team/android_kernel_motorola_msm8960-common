@@ -429,6 +429,9 @@ void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe)
 	if (mdp_is_in_isr == FALSE)
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
+	/* dma_p source */
+	MDP_OUTP(MDP_BASE + 0x90004,
+			(pipe->src_height << 16 | pipe->src_width));
 	if (pipe->blt_addr) {
 #ifdef BLT_RGB565
 		bpp = 2; /* overlay ouput is RGB565 */
@@ -446,9 +449,6 @@ void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe)
 		MDP_OUTP(MDP_BASE + 0x9000c, pipe->srcp0_ystride);
 	}
 
-	/* dma_p source */
-	MDP_OUTP(MDP_BASE + 0x90004,
-			(pipe->src_height << 16 | pipe->src_width));
 	/* dma_p dest */
 	MDP_OUTP(MDP_BASE + 0x90010, (pipe->dst_y << 16 | pipe->dst_x));
 
@@ -590,13 +590,13 @@ void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe)
 
 	mdp4_scale_setup(pipe);
 
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-
 	/* Ensure proper covert matrix loaded when color space swaps */
 	curr = inpdw(rgb_base + 0x0058);
 	/* Don't touch bits you don't want to configure*/
 	mask = 0xFFFEFFFF;
 	pipe->op_mode = (pipe->op_mode & mask) | (curr & ~mask);
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
 	outpdw(rgb_base + 0x0000, src_size);	/* MDP_RGB_SRC_SIZE */
 	outpdw(rgb_base + 0x0004, src_xy);	/* MDP_RGB_SRC_XY */
@@ -1463,6 +1463,33 @@ int mdp4_mixer_info(int mixer_num, struct mdp_mixer_info *info)
 	return cnt;
 }
 
+static void mdp4_overlay_bg_solidfill_clear(uint32 mixer_num)
+{
+	struct mdp4_overlay_pipe *bg_pipe;
+	unsigned char *rgb_base;
+	uint32 rgb_src_format;
+	int pnum;
+
+	bg_pipe = mdp4_overlay_stage_pipe(mixer_num,
+		MDP4_MIXER_STAGE_BASE);
+	if (bg_pipe && bg_pipe->pipe_type == OVERLAY_TYPE_BF) {
+		bg_pipe = mdp4_overlay_stage_pipe(mixer_num,
+				MDP4_MIXER_STAGE0);
+	}
+
+	if (bg_pipe && bg_pipe->pipe_type == OVERLAY_TYPE_RGB) {
+		rgb_src_format = mdp4_overlay_format(bg_pipe);
+		if (!(rgb_src_format & MDP4_FORMAT_SOLID_FILL)) {
+			pnum = bg_pipe->pipe_num - OVERLAY_PIPE_RGB1;
+			rgb_base = MDP_BASE + MDP4_RGB_BASE;
+			rgb_base += MDP4_RGB_OFF * pnum;
+			outpdw(rgb_base + 0x50, rgb_src_format);
+			outpdw(rgb_base + 0x0058, bg_pipe->op_mode);
+			mdp4_overlay_reg_flush(bg_pipe, 0);
+		}
+	}
+}
+
 void mdp4_mixer_pipe_cleanup(int mixer)
 {
 	struct mdp4_overlay_pipe *pipe;
@@ -1528,6 +1555,7 @@ static void mdp4_mixer_stage_commit(int mixer)
 			}
 
 			data = cfg[MDP4_MIXER0] | cfg[MDP4_MIXER1];
+
 			pr_debug("%s: mixer=%d data=%x flush=%x\n", __func__,
 			       mixer, data, flush_bits);
 
@@ -2657,6 +2685,12 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 			ctrl->stage[pipe->mixer_num][pipe->mixer_stage] = NULL;
 			mfd->use_ov0_blt &= ~(1 << (pipe->pipe_ndx-1));
 	} else {
+		if (pipe->is_fg &&
+			!mdp4_overlay_is_rgb_type(pipe->src_format)) {
+			mdp4_overlay_bg_solidfill_clear(pipe->mixer_num);
+			pipe->is_fg = 0;
+		}
+
 		mdp4_mixer_stage_down(pipe);
 
 		if (pipe->mixer_num == MDP4_MIXER0) {
@@ -2928,9 +2962,9 @@ int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req)
 		mdp4_overlay_vg_setup(pipe);	/* video/graphic pipe */
 	} else {
 		if (pipe->flags & MDP_SHARPENING) {
-/*			pr_warn(
+			pr_debug(
 			"%s: Sharpening/Smoothing not supported on RGB pipe\n",
-							     __func__); */
+								     __func__);
 			pipe->flags &= ~MDP_SHARPENING;
 		}
 		mdp4_overlay_rgb_setup(pipe);	/* rgb pipe */
