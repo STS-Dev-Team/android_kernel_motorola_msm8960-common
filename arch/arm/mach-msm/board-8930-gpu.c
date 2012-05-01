@@ -18,18 +18,12 @@
 #include <mach/board.h>
 
 #include "devices.h"
-#include "board-8064.h"
+#include "board-8930.h"
 
 #ifdef CONFIG_MSM_BUS_SCALING
 static struct msm_bus_vectors grp3d_init_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_3D,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = 0,
-	},
-	{
-		.src = MSM_BUS_MASTER_GRAPHICS_3D_PORT1,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
@@ -43,23 +37,11 @@ static struct msm_bus_vectors grp3d_low_vectors[] = {
 		.ab = 0,
 		.ib = KGSL_CONVERT_TO_MBPS(2000),
 	},
-	{
-		.src = MSM_BUS_MASTER_GRAPHICS_3D_PORT1,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = KGSL_CONVERT_TO_MBPS(2000),
-	},
 };
 
-static struct msm_bus_vectors grp3d_nominal_high_vectors[] = {
+static struct msm_bus_vectors grp3d_nominal_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_3D,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = KGSL_CONVERT_TO_MBPS(3200),
-	},
-	{
-		.src = MSM_BUS_MASTER_GRAPHICS_3D_PORT1,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = KGSL_CONVERT_TO_MBPS(3200),
@@ -69,12 +51,6 @@ static struct msm_bus_vectors grp3d_nominal_high_vectors[] = {
 static struct msm_bus_vectors grp3d_max_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_3D,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = KGSL_CONVERT_TO_MBPS(4264),
-	},
-	{
-		.src = MSM_BUS_MASTER_GRAPHICS_3D_PORT1,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = KGSL_CONVERT_TO_MBPS(4264),
@@ -91,8 +67,8 @@ static struct msm_bus_paths grp3d_bus_scale_usecases[] = {
 		grp3d_low_vectors,
 	},
 	{
-		ARRAY_SIZE(grp3d_nominal_high_vectors),
-		grp3d_nominal_high_vectors,
+		ARRAY_SIZE(grp3d_nominal_vectors),
+		grp3d_nominal_vectors,
 	},
 	{
 		ARRAY_SIZE(grp3d_max_vectors),
@@ -127,11 +103,6 @@ static const struct kgsl_iommu_ctx kgsl_3d0_iommu0_ctxs[] = {
 	{ "gfx3d_priv", 1 },
 };
 
-static const struct kgsl_iommu_ctx kgsl_3d0_iommu1_ctxs[] = {
-	{ "gfx3d1_user", 0 },
-	{ "gfx3d1_priv", 1 },
-};
-
 static struct kgsl_device_iommu_data kgsl_3d0_iommu_data[] = {
 	{
 		.iommu_ctxs = kgsl_3d0_iommu0_ctxs,
@@ -139,41 +110,34 @@ static struct kgsl_device_iommu_data kgsl_3d0_iommu_data[] = {
 		.physstart = 0x07C00000,
 		.physend = 0x07C00000 + SZ_1M - 1,
 	},
-	{
-		.iommu_ctxs = kgsl_3d0_iommu1_ctxs,
-		.iommu_ctx_count = ARRAY_SIZE(kgsl_3d0_iommu1_ctxs),
-		.physstart = 0x07D00000,
-		.physend = 0x07D00000 + SZ_1M - 1,
-	},
 };
 
 static struct kgsl_device_platform_data kgsl_3d0_pdata = {
 	.pwrlevel = {
 		{
-			.gpu_freq = 192000000,
+			.gpu_freq = 400000000,
+			.bus_freq = 3,
+			.io_fraction = 0,
+		},
+		{
+			.gpu_freq = 320000000,
 			.bus_freq = 2,
-			.io_fraction = 100,
+			.io_fraction = 33,
 		},
 		{
 			.gpu_freq = 192000000,
-			.bus_freq = 2,
+			.bus_freq = 1,
 			.io_fraction = 100,
 		},
 		{
-			.gpu_freq = 1920000000,
-			.bus_freq = 2,
-			.io_fraction = 100,
-		},
-		{
-			.gpu_freq = 192000000,
-			.bus_freq = 2,
-			.io_fraction = 100,
+			.gpu_freq = 27000000,
+			.bus_freq = 0,
 		},
 	},
 	.init_level = 0,
 	.num_levels = 4,
 	.set_grp_async = NULL,
-	.idle_timeout = HZ/20,
+	.idle_timeout = HZ/12,
 	.nap_allowed = true,
 	.clk_map = KGSL_CLK_CORE | KGSL_CLK_IFACE | KGSL_CLK_MEM_IFACE,
 #ifdef CONFIG_MSM_BUS_SCALING
@@ -183,7 +147,7 @@ static struct kgsl_device_platform_data kgsl_3d0_pdata = {
 	.iommu_count = ARRAY_SIZE(kgsl_3d0_iommu_data),
 };
 
-struct platform_device device_kgsl_3d0 = {
+static struct platform_device device_kgsl_3d0 = {
 	.name = "kgsl-3d0",
 	.id = 0,
 	.num_resources = ARRAY_SIZE(kgsl_3d0_resources),
@@ -193,7 +157,7 @@ struct platform_device device_kgsl_3d0 = {
 	},
 };
 
-void __init apq8064_init_gpu(void)
+void __init msm8930_init_gpu(void)
 {
 	platform_device_register(&device_kgsl_3d0);
 }
