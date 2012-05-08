@@ -328,9 +328,6 @@ static int msm_fb_probe(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	int rc;
 	int err = 0;
-#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
-	struct fb_info *fbi;
-#endif
 
 	MSM_FB_DEBUG("msm_fb_probe\n");
 
@@ -399,15 +396,6 @@ static int msm_fb_probe(struct platform_device *pdev)
 
 	pdev_list[pdev_list_cnt++] = pdev;
 	msm_fb_create_sysfs(pdev);
-
-	/* Avoiding fb1 blank/unblank to keeps HDMI enable
-	with smooth transition from BL to Kernel*/
-#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
-	if (mfd->index == 0) {
-		fbi = mfd->fbi;
-		msm_fb_blank_sub(FB_BLANK_UNBLANK, fbi, mfd->op_enable);
-	}
-#endif
 	return 0;
 }
 
@@ -772,8 +760,6 @@ void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl)
 
 	if (!mfd->panel_power_on || !bl_updated) {
 		unset_bl_level = bkl_lvl;
-		pr_debug("%s: panel_power_on=%d, bl_update=%d, not changing\n",
-			__func__, mfd->panel_power_on, bl_updated);
 		return;
 	} else {
 		unset_bl_level = -1;
@@ -851,8 +837,6 @@ static int msm_fb_blank_sub(int blank_mode, struct fb_info *info,
 				mfd->panel_power_on = curr_pwr_state;
 
 			mfd->op_enable = TRUE;
-			/* These flags are using for MDP hang debug purpose */
-			mdp4_clear_dump_flags();
 		} else {
 			if (pdata->power_ctrl)
 				pdata->power_ctrl(FALSE);
@@ -1053,8 +1037,6 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 	   is writing directly to fb0, the framebuffer pitch
 	   also needs to be 32 pixel aligned */
 
-	xres = xres + msm_fb_pdata->fb_xpad;
-
 	if (fb_index == 0)
 		return ALIGN(xres, 32) * bpp;
 	else
@@ -1064,13 +1046,14 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 static int msm_fb_register(struct msm_fb_data_type *mfd)
 {
 	int ret = -ENODEV;
-	int bpp, fb_size, fb_esize;
+	int bpp;
 	struct msm_panel_info *panel_info = &mfd->panel_info;
 	struct fb_info *fbi = mfd->fbi;
 	struct fb_fix_screeninfo *fix;
 	struct fb_var_screeninfo *var;
 	int *id;
 	int fbram_offset;
+	int remainder, remainder_mode2;
 	static int subsys_id[2] = {MSM_SUBSYSTEM_DISPLAY,
 		MSM_SUBSYSTEM_ROTATOR};
 	unsigned int flags = MSM_SUBSYSTEM_MAP_IOVA;
@@ -1099,11 +1082,6 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->sync = 0,	/* see FB_SYNC_* */
 	var->rotate = 0,	/* angle we rotate counter clockwise */
 	mfd->op_enable = FALSE;
-
-	if (panel_info->physical_height_mm)
-		var->height = panel_info->physical_height_mm;
-	if (panel_info->physical_width_mm)
-		var->width = panel_info->physical_width_mm;
 
 	switch (mfd->fb_imgType) {
 	case MDP_RGB_565:
@@ -1216,21 +1194,34 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fix->line_length = msm_fb_line_length(mfd->index, panel_info->xres,
 					      bpp);
 
-	fb_size  = (msm_fb_line_length(mfd->index, panel_info->xres, bpp) *
-			(panel_info->yres + msm_fb_pdata->fb_ypad) *
-			mfd->fb_page);
-	fb_esize = (msm_fb_line_length(mfd->index, panel_info->mode2_xres, bpp) *
-			(panel_info->mode2_yres + msm_fb_pdata->fb_ypad) *
-			mfd->fb_page);
+	/* Make sure all buffers can be addressed on a page boundary by an x
+	 * and y offset */
 
-	var->yoffset = (panel_info->yres + msm_fb_pdata->fb_ypad);
+	remainder = (fix->line_length * panel_info->yres) & (PAGE_SIZE - 1);
+					/* PAGE_SIZE is a power of 2 */
+	if (!remainder)
+		remainder = PAGE_SIZE;
+	remainder_mode2 = (fix->line_length *
+				panel_info->mode2_yres) & (PAGE_SIZE - 1);
+	if (!remainder_mode2)
+		remainder_mode2 = PAGE_SIZE;
 
 	/*
 	 * calculate smem_len based on max size of two supplied modes.
 	 * Only fb0 has mem. fb1 and fb2 don't have mem.
 	 */
+
 	if (mfd->index == 0)
-		fix->smem_len = roundup(MAX(fb_size, fb_esize), PAGE_SIZE);
+		fix->smem_len = MAX((msm_fb_line_length(mfd->index,
+							panel_info->xres,
+							bpp) *
+				     panel_info->yres + PAGE_SIZE -
+				     remainder) * mfd->fb_page,
+				    (msm_fb_line_length(mfd->index,
+							panel_info->mode2_xres,
+							bpp) *
+				     panel_info->mode2_yres + PAGE_SIZE -
+				     remainder_mode2) * mfd->fb_page);
 	else if (mfd->index == 1 || mfd->index == 2) {
 		pr_debug("%s:%d no memory is allocated for fb%d!\n",
 			__func__, __LINE__, mfd->index);
@@ -1315,6 +1306,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fbi->fbops = &msm_fb_ops;
 	fbi->flags = FBINFO_FLAG_DEFAULT;
 	fbi->pseudo_palette = msm_fb_pseudo_palette;
+
 	mfd->ref_cnt = 0;
 	mfd->sw_currently_refreshing = FALSE;
 	mfd->sw_refreshing_enable = TRUE;
@@ -1355,7 +1347,6 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			fbi->fix.smem_start, mfd->map_buffer->iova[0],
 			mfd->map_buffer->iova[1]);
 	}
-
 	if (mfd->index == 0)
 		memset(fbi->screen_base, 0x0, fix->smem_len);
 
@@ -1547,8 +1538,8 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 
 static int msm_fb_open(struct fb_info *info, int user)
 {
-	int result;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	int result;
 
 	result = pm_runtime_get_sync(info->dev);
 
@@ -1561,17 +1552,6 @@ static int msm_fb_open(struct fb_info *info, int user)
 			return 0;
 	}
 
-	/* The display will be unblanked in msm_fb_probe() when
-	 * CONFIG_FB_MSM_BOOTLOADER_INIT is set, because we don't want to depend
-	 * on the FB's client to call msm_fb_open() or msm_fb_release() which
-	 * cause the display to turn on and off unexpectively
-	 */
-#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
-	/* Avoiding fb clients to blank/unblank fb0 */
-	if (mfd->index == 0) {
-		return 0;
-	}
-#endif
 	if (!mfd->ref_cnt) {
 		if ((info->node != 1) && (info->node != 2)) {
 			mdp_set_dma_pan_info(info, NULL, TRUE);
@@ -1591,16 +1571,9 @@ static int msm_fb_open(struct fb_info *info, int user)
 
 static int msm_fb_release(struct fb_info *info, int user)
 {
-	int ret = 0;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	int ret = 0;
 
-	/* Avoiding fb clients to powerdown fb0 */
-#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
-	if (mfd->index == 0) {
-		pm_runtime_put(info->dev);
-		return 0;
-	}
-#endif
 	if (!mfd->ref_cnt) {
 		MSM_FB_INFO("msm_fb_release: try to close unopened fb %d!\n",
 			    mfd->index);
@@ -1614,13 +1587,6 @@ static int msm_fb_release(struct fb_info *info, int user)
 		     msm_fb_blank_sub(FB_BLANK_POWERDOWN, info,
 				      mfd->op_enable)) != 0) {
 			printk(KERN_ERR "msm_fb_release: can't turn off display!\n");
-			/*
-			 * It should be framework exited in early suspend.
-			 * add 1 back to mfd->ref_cnt so fb could be opened
-			 * in next time.
-			 */
-			mfd->ref_cnt++;
-			pm_runtime_put(info->dev);
 			return ret;
 		}
 	}
@@ -1638,7 +1604,6 @@ static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 	struct mdp_dirty_region *dirtyPtr = NULL;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	struct msm_fb_panel_data *pdata;
-	static int ignore_count;
 
 	/*
 	 * If framebuffer is 1 or 2, io pen display is not allowed.
@@ -1714,14 +1679,9 @@ static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 
 	if (info->node == 0 && !(mfd->cont_splash_done)) { /* primary */
 		mdp_set_dma_pan_info(info, NULL, TRUE);
-		/*Just a hack way to avoiding blank/unblank fb0 during the 1st and 2nd
-		  call msm_fb_pan_display() */
-		if ((ignore_count > 1 || mfd->panel.type != MIPI_CMD_PANEL) &&
-			msm_fb_blank_sub(FB_BLANK_UNBLANK, info, mfd->op_enable)) {
+		if (msm_fb_blank_sub(FB_BLANK_UNBLANK, info, mfd->op_enable)) {
 			pr_err("%s: can't turn on display!\n", __func__);
 			return -EINVAL;
-		} else {
-			ignore_count++;
 		}
 	}
 
@@ -1921,36 +1881,7 @@ static int msm_fb_set_par(struct fb_info *info)
 		mfd->var_yres = var->yres;
 		mfd->var_pixclock = var->pixclock;
 		blank = 1;
-#ifdef MSM_FB_US_DVI_SUPPORT
-		mfd->var_vmode = var->vmode;
-#endif
 	}
-
-#ifdef MSM_FB_US_DVI_SUPPORT
-	if (mfd->hw_refresh && (var->reserved[3] == 99) &&
-	    ((mfd->var_left_margin != var->left_margin) ||
-	     (mfd->var_right_margin != var->right_margin) ||
-	     (mfd->var_upper_margin != var->upper_margin) ||
-	     (mfd->var_lower_margin != var->lower_margin) ||
-	     (mfd->var_hsync_len != var->hsync_len) ||
-	     (mfd->var_vsync_len != var->vsync_len) ||
-	     (mfd->var_sync != var->sync) ||
-	     (mfd->var_vmode != var->vmode))) {
-		mfd->var_xres = var->xres;
-		mfd->var_yres = var->yres;
-		mfd->var_pixclock = var->pixclock;
-		mfd->var_left_margin = var->left_margin;
-		mfd->var_right_margin = var->right_margin;
-		mfd->var_upper_margin = var->upper_margin;
-		mfd->var_lower_margin = var->lower_margin;
-		mfd->var_hsync_len = var->hsync_len;
-		mfd->var_vsync_len = var->vsync_len;
-		mfd->var_sync = var->sync;
-		mfd->var_vmode = var->vmode;
-		blank = 1;
-	}
-#endif
-
 	mfd->fbi->fix.line_length = msm_fb_line_length(mfd->index, var->xres,
 						       var->bits_per_pixel/8);
 
