@@ -1053,8 +1053,6 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 	   is writing directly to fb0, the framebuffer pitch
 	   also needs to be 32 pixel aligned */
 
-	xres = xres + msm_fb_pdata->fb_xpad;
-
 	if (fb_index == 0)
 		return ALIGN(xres, 32) * bpp;
 	else
@@ -1064,13 +1062,14 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 static int msm_fb_register(struct msm_fb_data_type *mfd)
 {
 	int ret = -ENODEV;
-	int bpp, fb_size, fb_esize;
+	int bpp;
 	struct msm_panel_info *panel_info = &mfd->panel_info;
 	struct fb_info *fbi = mfd->fbi;
 	struct fb_fix_screeninfo *fix;
 	struct fb_var_screeninfo *var;
 	int *id;
 	int fbram_offset;
+	int remainder, remainder_mode2;
 	static int subsys_id[2] = {MSM_SUBSYSTEM_DISPLAY,
 		MSM_SUBSYSTEM_ROTATOR};
 	unsigned int flags = MSM_SUBSYSTEM_MAP_IOVA;
@@ -1099,11 +1098,6 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->sync = 0,	/* see FB_SYNC_* */
 	var->rotate = 0,	/* angle we rotate counter clockwise */
 	mfd->op_enable = FALSE;
-
-	if (panel_info->physical_height_mm)
-		var->height = panel_info->physical_height_mm;
-	if (panel_info->physical_width_mm)
-		var->width = panel_info->physical_width_mm;
 
 	switch (mfd->fb_imgType) {
 	case MDP_RGB_565:
@@ -1216,21 +1210,34 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fix->line_length = msm_fb_line_length(mfd->index, panel_info->xres,
 					      bpp);
 
-	fb_size  = (msm_fb_line_length(mfd->index, panel_info->xres, bpp) *
-			(panel_info->yres + msm_fb_pdata->fb_ypad) *
-			mfd->fb_page);
-	fb_esize = (msm_fb_line_length(mfd->index, panel_info->mode2_xres, bpp) *
-			(panel_info->mode2_yres + msm_fb_pdata->fb_ypad) *
-			mfd->fb_page);
+	/* Make sure all buffers can be addressed on a page boundary by an x
+	 * and y offset */
 
-	var->yoffset = (panel_info->yres + msm_fb_pdata->fb_ypad);
+	remainder = (fix->line_length * panel_info->yres) & (PAGE_SIZE - 1);
+					/* PAGE_SIZE is a power of 2 */
+	if (!remainder)
+		remainder = PAGE_SIZE;
+	remainder_mode2 = (fix->line_length *
+				panel_info->mode2_yres) & (PAGE_SIZE - 1);
+	if (!remainder_mode2)
+		remainder_mode2 = PAGE_SIZE;
 
 	/*
 	 * calculate smem_len based on max size of two supplied modes.
 	 * Only fb0 has mem. fb1 and fb2 don't have mem.
 	 */
+
 	if (mfd->index == 0)
-		fix->smem_len = roundup(MAX(fb_size, fb_esize), PAGE_SIZE);
+		fix->smem_len = MAX((msm_fb_line_length(mfd->index,
+							panel_info->xres,
+							bpp) *
+				     panel_info->yres + PAGE_SIZE -
+				     remainder) * mfd->fb_page,
+				    (msm_fb_line_length(mfd->index,
+							panel_info->mode2_xres,
+							bpp) *
+				     panel_info->mode2_yres + PAGE_SIZE -
+				     remainder_mode2) * mfd->fb_page);
 	else if (mfd->index == 1 || mfd->index == 2) {
 		pr_debug("%s:%d no memory is allocated for fb%d!\n",
 			__func__, __LINE__, mfd->index);
@@ -1355,7 +1362,6 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			fbi->fix.smem_start, mfd->map_buffer->iova[0],
 			mfd->map_buffer->iova[1]);
 	}
-
 	if (mfd->index == 0)
 		memset(fbi->screen_base, 0x0, fix->smem_len);
 
