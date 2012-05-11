@@ -145,14 +145,11 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	pipe->src_w = fbi->var.xres;
 	pipe->src_y = 0;
 	pipe->src_x = 0;
-	if (mfd->map_buffer) {
-		pipe->srcp0_addr = (unsigned int)mfd->map_buffer->iova[0] + \
-			buf_offset;
-		pr_debug("start 0x%lx srcp0_addr 0x%x\n", mfd->
-			map_buffer->iova[0], pipe->srcp0_addr);
-	} else {
+
+	if (mfd->display_iova)
+		pipe->srcp0_addr = mfd->display_iova + buf_offset;
+	else
 		pipe->srcp0_addr = (uint32)(buf + buf_offset);
-	}
 
 	pipe->srcp0_ystride = fbi->fix.line_length;
 	pipe->bpp = bpp;
@@ -577,21 +574,12 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	mutex_lock(&mfd->dma->ov_mutex);
 
 	pipe = lcdc_pipe;
-	if (pipe->pipe_used == 0 ||
-			pipe->mixer_stage != MDP4_MIXER_STAGE_BASE) {
-		pr_err("%s: NOT baselayer\n", __func__);
-		mutex_unlock(&mfd->dma->ov_mutex);
-		return;
-	}
 
-	if (mfd->map_buffer) {
-		pipe->srcp0_addr = (unsigned int)mfd->map_buffer->iova[0] + \
-			buf_offset;
-		pr_debug("start 0x%lx srcp0_addr 0x%x\n", mfd->
-			map_buffer->iova[0], pipe->srcp0_addr);
-	} else {
+	if (mfd->display_iova)
+		pipe->srcp0_addr = mfd->display_iova + buf_offset;
+	else
 		pipe->srcp0_addr = (uint32)(buf + buf_offset);
-	}
+
 	mdp4_overlay_rgb_setup(pipe);
 	mdp4_overlay_reg_flush(pipe, 1);
 	mdp4_mixer_stage_up(pipe);
