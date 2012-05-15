@@ -794,8 +794,48 @@ static void __init apq8064_rumi3_init(void)
 {
 	apq8064_common_init();
 	ethernet_init();
+	msm_rotator_set_split_iommu_domain();
 	platform_add_devices(rumi3_devices, ARRAY_SIZE(rumi3_devices));
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
+}
+
+static void __init apq8064_cdp_init(void)
+{
+	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
+		pr_err("meminfo_init() failed!\n");
+	apq8064_common_init();
+	if (machine_is_mpq8064_cdp() || machine_is_mpq8064_hrd() ||
+		machine_is_mpq8064_dtv()) {
+		enable_avc_i2c_bus();
+		msm_rotator_set_split_iommu_domain();
+		platform_add_devices(mpq_devices, ARRAY_SIZE(mpq_devices));
+		mpq8064_pcie_init();
+	} else {
+		ethernet_init();
+		msm_rotator_set_split_iommu_domain();
+		platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
+		spi_register_board_info(spi_board_info,
+						ARRAY_SIZE(spi_board_info));
+	}
+	apq8064_init_fb();
+	apq8064_init_gpu();
+	platform_add_devices(apq8064_footswitch, apq8064_num_footswitch);
+#ifdef CONFIG_MSM_CAMERA
+	apq8064_init_cam();
+#endif
+
+	if (machine_is_apq8064_cdp() || machine_is_apq8064_liquid())
+		platform_device_register(&cdp_kp_pdev);
+
+	if (machine_is_apq8064_mtp())
+		platform_device_register(&mtp_kp_pdev);
+
+	change_memory_power = &apq8064_change_memory_power;
+
+	if (machine_is_mpq8064_cdp()) {
+		platform_device_register(&mpq_gpio_keys_pdev);
+		platform_device_register(&mpq_keypad_device);
+	}
 }
 
 MACHINE_START(APQ8064_SIM, "QCT APQ8064 SIMULATOR")
