@@ -779,6 +779,13 @@ void mdp4_free_writeback_buf(struct msm_fb_data_type *mfd, u32 mix_num);
 int mdp4_igc_lut_config(struct mdp_igc_lut_data *cfg);
 void mdp4_iommu_unmap(struct mdp4_overlay_pipe *pipe);
 void mdp4_iommu_attach(void);
+void mdp4_iommu_detach(void);
+int mdp4_v4l2_overlay_set(struct fb_info *info, struct mdp_overlay *req,
+		struct mdp4_overlay_pipe **ppipe);
+void mdp4_v4l2_overlay_clear(struct mdp4_overlay_pipe *pipe);
+int mdp4_v4l2_overlay_play(struct fb_info *info, struct mdp4_overlay_pipe *pipe,
+	unsigned long srcp0_addr, unsigned long srcp1_addr,
+	unsigned long srcp2_addr);
 
 #define COMMIT_HIST_TBL_SIZE 20
 
@@ -794,12 +801,5 @@ void mdp4_dump_commit_info(void);
 void mdp4_regs_dump(void);
 void mdp4_hang_panic(void);
 void mdp4_clear_dump_flags(void);
-
-int mdp4_v4l2_overlay_set(struct fb_info *info, struct mdp_overlay *req,
-		struct mdp4_overlay_pipe **ppipe);
-void mdp4_v4l2_overlay_clear(struct mdp4_overlay_pipe *pipe);
-int mdp4_v4l2_overlay_play(struct fb_info *info, struct mdp4_overlay_pipe *pipe,
-	unsigned long srcp0_addr, unsigned long srcp1_addr,
-	unsigned long srcp2_addr);
 
 #endif /* MDP_H */
