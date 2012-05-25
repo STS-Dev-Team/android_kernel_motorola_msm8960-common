@@ -1094,7 +1094,7 @@ static int msm_mctl_v4l2_reqbufs(struct file *f, void *pctx,
 	mutex_lock(&pcam_inst->pcam->mctl_node.dev_lock);
 	if (rc < 0) {
 		pr_err("%s reqbufs failed %d ", __func__, rc);
-		mutex_unlock(&pcam_inst->pcam->mctl_node.dev_lock);
+	mutex_unlock(&pcam_inst->pcam->mctl_node.dev_lock);
 		return rc;
 	}
 	if (!pb->count) {
