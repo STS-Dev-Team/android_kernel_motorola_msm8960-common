@@ -693,7 +693,14 @@ void mdp4_overlay_dsi_video_wait4event(struct msm_fb_data_type *mfd,
 					int intr_done);
 void mdp4_dsi_cmd_overlay_restore(void);
 void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd);
+#ifdef CONFIG_FB_MSM_MDP303
+static inline void mdp4_dsi_cmd_del_timer(void)
+{
+	/* empty */
+}
+#else
 void mdp4_dsi_cmd_del_timer(void);
+#endif
 #else
 static inline void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
 {

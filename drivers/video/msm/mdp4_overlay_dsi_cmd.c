@@ -67,18 +67,8 @@ static void dsi_clock_tout(unsigned long data)
 	spin_lock(&dsi_clk_lock);
 	if (mipi_dsi_clk_on) {
 		if (dsi_state == ST_DSI_PLAYING) {
-			if (mipi_dsi_get_dsi_status() & 0x7) {
-				/*
-				 * DSI still is busy to transfer the pixel or
-				 * MIPI command, then push dsi_clock_timer()
-				 * MS_MDP_TOUT later
-				 */
-				tout_expired = jiffies + MS_MDP_TOUT;
-				mod_timer(&dsi_clock_timer, tout_expired);
-			} else {
 				mipi_dsi_turn_off_clks();
 				mdp4_overlay_dsi_state_set(ST_DSI_CLK_OFF);
-			}
 		}
 	}
 	spin_unlock(&dsi_clk_lock);
@@ -101,8 +91,7 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 
 void mdp4_dsi_cmd_del_timer(void)
 {
-	if (dsi_clock_timer.function)
-		del_timer_sync(&dsi_clock_timer);
+	del_timer_sync(&dsi_clock_timer);
 }
 
 void mdp4_mipi_vsync_enable(struct msm_fb_data_type *mfd,
