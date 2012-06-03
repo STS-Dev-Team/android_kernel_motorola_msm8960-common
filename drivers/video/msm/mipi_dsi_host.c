@@ -158,11 +158,6 @@ void mipi_dsi_turn_off_clks(void)
 	mipi_dsi_ahb_ctrl(0);
 }
 
-int mipi_dsi_get_dsi_status(void)
-{
-	return MIPI_INP(MIPI_DSI_BASE + 0x04);
-}
-
 static void mipi_dsi_action(struct list_head *act_list)
 {
 	struct list_head *lp;

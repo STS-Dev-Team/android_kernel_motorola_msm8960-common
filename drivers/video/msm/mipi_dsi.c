@@ -141,9 +141,6 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	mipi_dsi_ahb_ctrl(0);
 	spin_unlock_bh(&dsi_clk_lock);
 
-	if (mipi_dsi_pdata && mipi_dsi_pdata->panel_power_save)
-		mipi_dsi_pdata->panel_power_save(0);
-
 	mipi_dsi_unprepare_clocks();
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
 		mipi_dsi_pdata->dsi_power_save(0);
