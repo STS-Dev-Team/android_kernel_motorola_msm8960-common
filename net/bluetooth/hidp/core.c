@@ -94,6 +94,26 @@ static struct hidp_session *__hidp_get_session(bdaddr_t *bdaddr)
 	return NULL;
 }
 
+static struct device *hidp_get_device(struct hidp_session *session)
+{
+	bdaddr_t *src = &bt_sk(session->ctrl_sock->sk)->src;
+	bdaddr_t *dst = &bt_sk(session->ctrl_sock->sk)->dst;
+	struct device *device = NULL;
+	struct hci_dev *hdev;
+
+	hdev = hci_get_route(dst, src);
+	if (!hdev)
+		return NULL;
+
+	session->conn = hci_conn_hash_lookup_ba(hdev, ACL_LINK, dst);
+	if (session->conn)
+		device = &session->conn->dev;
+
+	hci_dev_put(hdev);
+
+	return device;
+}
+
 static void __hidp_link_session(struct hidp_session *session)
 {
 	__module_get(THIS_MODULE);
@@ -102,7 +122,10 @@ static void __hidp_link_session(struct hidp_session *session)
 
 static void __hidp_unlink_session(struct hidp_session *session)
 {
-	if (session->conn)
+	struct device *dev;
+
+	dev = hidp_get_device(session);
+	if (dev)
 		hci_conn_put_device(session->conn);
 
 	list_del(&session->list);
