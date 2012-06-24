@@ -455,6 +455,9 @@ void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe)
 		MDP_OUTP(MDP_BASE + 0x90008, pipe->srcp0_addr);
 		MDP_OUTP(MDP_BASE + 0x9000c, pipe->srcp0_ystride);
 	}
+	/* dma_p source */
+	MDP_OUTP(MDP_BASE + 0x90004,
+			(pipe->src_height << 16 | pipe->src_width));
 
 	/* dma_p source */
 	MDP_OUTP(MDP_BASE + 0x90004,
