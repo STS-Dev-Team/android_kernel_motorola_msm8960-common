@@ -700,7 +700,7 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 {
 	unsigned long flag;
 
-
+	mdp4_iommu_attach();
 	/* change mdp clk */
 	mdp4_set_perf_level();
 
@@ -760,7 +760,6 @@ void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
 
 		mdp4_overlay_update_dsi_cmd(mfd);
 
-		mdp4_iommu_attach();
 		mdp4_dsi_cmd_kickoff_ui(mfd, dsi_pipe);
 
 		if (!mfd->use_ov0_blt) {
