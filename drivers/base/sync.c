@@ -455,7 +455,7 @@ struct sync_fence *sync_fence_merge(const char *name,
 	if (err < 0)
 		goto err;
 
-	err = sync_fence_copy_pts(fence, b);
+	err = sync_fence_merge_pts(fence, b);
 	if (err < 0)
 		goto err;
 
