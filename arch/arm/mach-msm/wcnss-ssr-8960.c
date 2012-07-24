@@ -118,6 +118,7 @@ static int riva_shutdown(const struct subsys_data *subsys)
 {
 	pil_force_shutdown("wcnss");
 	flush_delayed_work(&cancel_vote_work);
+	wcnss_flush_delayed_boot_votes();
 
 	return 0;
 }
