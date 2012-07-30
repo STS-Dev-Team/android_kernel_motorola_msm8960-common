@@ -2072,9 +2072,9 @@ err_unregister_pmops:
    hddDeregisterPmOps(pHddCtx);
 
 err_bap_stop:
+#ifdef WLAN_BTAMP_FEATURE
   WLANBAP_Stop(pVosContext);
 
-#ifdef WLAN_BTAMP_FEATURE
 err_bap_close:
    WLANBAP_Close(pVosContext);
 #endif
