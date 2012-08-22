@@ -544,14 +544,14 @@ int sync_fence_cancel_async(struct sync_fence *fence,
 
 int sync_fence_wait(struct sync_fence *fence, long timeout)
 {
-	int err;
+	int err = 0;
 
-	if (timeout) {
+	if (timeout > 0) {
 		timeout = msecs_to_jiffies(timeout);
 		err = wait_event_interruptible_timeout(fence->wq,
 						       fence->status != 0,
 						       timeout);
-	} else {
+	} else if (timeout < 0{
 		err = wait_event_interruptible(fence->wq, fence->status != 0);
 	}
 
