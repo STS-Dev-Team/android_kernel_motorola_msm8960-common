@@ -980,21 +980,9 @@ int mdp4_overlay_mdp_pipe_req(struct mdp4_overlay_pipe *pipe,
 int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd,
 			      struct mdp4_overlay_pipe *plist);
 void mdp4_overlay_mdp_perf_upd(struct msm_fb_data_type *mfd, int flag);
-
-#define COMMIT_HIST_TBL_SIZE 20
-
-/*having a struct in case further info needs to be added*/
-struct mdp4_commit_hist_tbl {
-	uint32 commit_cnt;
-	int32_t stage_commit;
-};
-
-void mdp4_stats_dump(struct mdp4_statistic stat);
-void mdp4_store_commit_info(void);
-void mdp4_dump_commit_info(void);
-void mdp4_regs_dump(void);
-void mdp4_hang_panic(void);
-void mdp4_clear_dump_flags(void);
+int mdp4_update_base_blend(struct msm_fb_data_type *mfd,
+				struct mdp_blend_cfg *mdp_blend_cfg);
+u32 mdp4_get_mixer_num(u32 panel_type);
 
 #ifndef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
 static inline void mdp4_writeback_dma_busy_wait(struct msm_fb_data_type *mfd)
@@ -1011,5 +999,20 @@ void mdp4_writeback_dma_busy_wait(struct msm_fb_data_type *mfd);
 void mdp4_writeback_kickoff_video(struct msm_fb_data_type *mfd,
 		struct mdp4_overlay_pipe *pipe);
 #endif
+
+#define COMMIT_HIST_TBL_SIZE 20
+
+/*having a struct in case further info needs to be added*/
+struct mdp4_commit_hist_tbl {
+	uint32 commit_cnt;
+	int32_t stage_commit;
+};
+
+void mdp4_stats_dump(struct mdp4_statistic stat);
+void mdp4_store_commit_info(void);
+void mdp4_dump_commit_info(void);
+void mdp4_regs_dump(void);
+void mdp4_hang_panic(void);
+void mdp4_clear_dump_flags(void);
 
 #endif /* MDP_H */

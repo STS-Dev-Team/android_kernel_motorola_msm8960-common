@@ -73,12 +73,13 @@
 
 #define MSMFB_VSYNC_CTRL  _IOW(MSMFB_IOCTL_MAGIC, 161, unsigned int)
 
-#define MSMFB_REG_READ		_IOWR(MSMFB_IOCTL_MAGIC, 64, struct msmfb_reg_access)
-#define MSMFB_REG_WRITE	_IOW(MSMFB_IOCTL_MAGIC, 65, struct msmfb_reg_access)
-
+#define MSMFB_METADATA_SET  _IOW(MSMFB_IOCTL_MAGIC, 162, struct msmfb_metadata)
 #define FB_TYPE_3D_PANEL 0x10101010
 #define MDP_IMGTYPE2_START 0x10000
 #define MSMFB_DRIVER_VERSION	0xF9E8D701
+
+#define MSMFB_REG_READ		_IOWR(MSMFB_IOCTL_MAGIC, 64, struct msmfb_reg_access)
+#define MSMFB_REG_WRITE	_IOW(MSMFB_IOCTL_MAGIC, 65, struct msmfb_reg_access)
 
 enum {
 	NOTIFY_UPDATE_START,
@@ -487,7 +488,23 @@ struct msmfb_mdp_pp {
 	} data;
 };
 
+enum {
+	metadata_op_none,
+	metadata_op_base_blend,
+	metadata_op_max
+};
 
+struct mdp_blend_cfg {
+	uint32_t is_premultiplied;
+};
+
+struct msmfb_metadata {
+	uint32_t op;
+	uint32_t flags;
+	union {
+		struct mdp_blend_cfg blend_cfg;
+	} data;
+};
 struct mdp_page_protection {
 	uint32_t page_protection;
 };
