@@ -1188,17 +1188,9 @@ static int kgsl_check_interrupt_timestamp(struct kgsl_device *device,
 			cmds[0] = cp_type3_packet(CP_NOP, 1);
 			cmds[1] = 0;
 
-			if (adreno_dev->drawctxt_active)
-				adreno_ringbuffer_issuecmds(device,
+			adreno_ringbuffer_issuecmds(device,
 					adreno_dev->drawctxt_active,
 					KGSL_CMD_FLAGS_NONE, &cmds[0], 2);
-			else
-				/*
-				 * This means we are using global timestamps
-				 */
-				adreno_ringbuffer_issuecmds(device,
-					NULL, KGSL_CMD_FLAGS_NONE,
-					&cmds[0], 2);
 		}
 		mutex_unlock(&device->mutex);
 	}
