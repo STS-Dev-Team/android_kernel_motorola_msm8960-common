@@ -284,7 +284,13 @@ static int mipi_dsi_on(struct platform_device *pdev)
 		wmb();
 	}
 
-	ret = panel_next_on(pdev);
+	if (mdp_rev >= MDP_REV_41)
+		mutex_lock(&mfd->dma->ov_mutex);
+	else
+		down(&mfd->dma->mutex);
+
+	if (mfd->op_enable)
+		ret = panel_next_on(pdev);
 
 	mipi_dsi_op_mode_config(mipi->mode);
 
