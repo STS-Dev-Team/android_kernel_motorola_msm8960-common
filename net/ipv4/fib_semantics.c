@@ -152,8 +152,6 @@ static void free_fib_info_rcu(struct rcu_head *head)
 	} endfor_nexthops(fi);
 
 	release_net(fi->fib_net);
-	if (fi->fib_metrics != (u32 *) dst_default_metrics)
-		kfree(fi->fib_metrics);
 	kfree(fi);
 }
 

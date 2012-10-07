@@ -3444,7 +3444,11 @@ static const struct usb_device_id	products [] = {
 	USB_DEVICE (0x6189, 0x182d),
 	.driver_info =  (unsigned long) &ax8817x_info,
 }, {
-	/* corega FEther USB2-TX */
+	// Sitecom LN-031 "USB 2.0 10/100/1000 Ethernet adapter"
+	USB_DEVICE (0x0df6, 0x0056),
+	.driver_info =  (unsigned long) &ax88178_info,
+}, {
+	// corega FEther USB2-TX
 	USB_DEVICE (0x07aa, 0x0017),
 	.driver_info =  (unsigned long) &ax8817x_info,
 }, {
@@ -3464,9 +3468,13 @@ static const struct usb_device_id	products [] = {
         USB_DEVICE (0x125E, 0x180D),
         .driver_info = (unsigned long) &ax88772_info,
 }, {
-	/* ASIX AX88772A 10/100 */
-        USB_DEVICE (0x0b95, 0x772A),
-        .driver_info = (unsigned long) &ax88772a_info,
+       // DLink DUB-E100 H/W Ver C1
+       USB_DEVICE (0x2001, 0x1a02),
+       .driver_info = (unsigned long) &ax88772_info,
+}, {
+	// Linksys USB1000
+	USB_DEVICE (0x1737, 0x0039),
+	.driver_info = (unsigned long) &ax88178_info,
 }, {
 	/* ASIX AX88772A 10/100 */
         USB_DEVICE (0x0db0, 0xA877),
@@ -3487,9 +3495,13 @@ static const struct usb_device_id	products [] = {
         USB_DEVICE (0x0b95, 0x772B),
         .driver_info = (unsigned long) &ax88772b_info,
 }, {
-	/* ASIX AX88772B 10/100 */
-        USB_DEVICE (0x0b95, 0x7E2B),
-        .driver_info = (unsigned long) &ax88772b_info,
+	// ASIX 88772a
+	USB_DEVICE(0x0db0, 0xa877),
+	.driver_info = (unsigned long) &ax88772_info,
+}, {
+	// Asus USB Ethernet Adapter
+	USB_DEVICE (0x0b95, 0x7e2b),
+	.driver_info = (unsigned long) &ax88772_info,
 },
 	{ },		/* END */
 };
