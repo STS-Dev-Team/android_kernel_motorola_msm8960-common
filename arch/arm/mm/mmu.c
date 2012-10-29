@@ -805,7 +805,7 @@ void __init sanity_check_meminfo(void)
 {
 	int i, j, highmem = 0;
 #if defined(CONFIG_DONT_MAP_HOLE_IN_LOWMEM)
-	unsigned long start, prev, delta;
+	unsigned long start = 0, prev = 0, delta = 0;
 #endif
 
 #if defined(CONFIG_DONT_MAP_HOLE_IN_LOWMEM)
