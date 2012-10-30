@@ -68,7 +68,6 @@
 
 #define MSMFB_OVERLAY_VSYNC_CTRL  _IOW(MSMFB_IOCTL_MAGIC, 160, unsigned int)
 
-
 #define MSMFB_REG_READ		_IOWR(MSMFB_IOCTL_MAGIC, 64, struct msmfb_reg_access)
 #define MSMFB_REG_WRITE	_IOW(MSMFB_IOCTL_MAGIC, 65, struct msmfb_reg_access)
 
@@ -251,6 +250,7 @@ struct msmfb_overlay_data {
 	uint32_t version_key;
 	struct msmfb_data plane1_data;
 	struct msmfb_data plane2_data;
+	struct msmfb_data dst_data;
 };
 
 struct msmfb_img {
