@@ -3176,6 +3176,9 @@ wlan_hdd_cfg80211_inform_bss_frame( hdd_adapter_t *pAdapter,
 
     ENTER();
 
+    if (!mgmt)
+        return NULL;
+
     memcpy(mgmt->bssid, bss_desc->bssId, ETH_ALEN);
 
 #ifdef WLAN_OPEN_SOURCE
@@ -3532,7 +3535,7 @@ static eHalStatus hdd_cfg80211_scan_done_callback(tHalHandle halHandle,
     if(pScanInfo->flushP2pScanResults)
     {
         tANI_U8 sessionId = pAdapter->sessionId;
-        sme_ScanFlushResult(WLAN_HDD_GET_HAL_CTX(pAdapter), sessionId);
+        sme_ScanFlushP2PResult(WLAN_HDD_GET_HAL_CTX(pAdapter), sessionId);
         pScanInfo->flushP2pScanResults = 0;
     }
 #endif
