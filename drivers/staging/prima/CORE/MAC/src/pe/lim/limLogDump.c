@@ -1913,22 +1913,14 @@ static char *
 dump_lim_send_rrm_action( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p)
 {
     tpPESession psessionEntry;
-    tSirMacRadioMeasureReport *pRRMReport =
-            vos_mem_malloc(4*sizeof(tSirMacRadioMeasureReport));
+    tSirMacRadioMeasureReport pRRMReport[4];
     tANI_U8 num = (tANI_U8)(arg4 > 4 ? 4 : arg4);
     tANI_U8 i;
-
-    if (!pRRMReport)
-    {
-        p += log_sprintf(pMac, p,
-                         "Unable to allocate memory to process command\n");
-        goto done;
-    }
 
     if((psessionEntry = peFindSessionBySessionId(pMac,(tANI_U8)arg2) )== NULL)
     {
         p += log_sprintf( pMac,p,"Session does not exist for given session Id  \n");
-        goto done;
+        return p;
     }
     switch (arg3)
     {
@@ -2008,9 +2000,6 @@ dump_lim_send_rrm_action( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tAN
          default:
               break;
     }
-
-done:
-    vos_mem_free(pRRMReport);
     return p;    
 }
 
@@ -2151,37 +2140,22 @@ dump_lim_unpack_rrm_action( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, t
       case 2:
       case 3:
          {
-            tDot11fRadioMeasurementRequest *frm =
-                    vos_mem_malloc(sizeof(tDot11fRadioMeasurementRequest));
-            if (!frm)
-            {
-                p += log_sprintf(pMac, p,
-                            "Unable to allocate memory to process command\n");
-                break;
-            }
-            if( (status = dot11fUnpackRadioMeasurementRequest( pMac, &pBody[arg2][0], size[arg2], frm )) != 0 )
+            tDot11fRadioMeasurementRequest frm;
+            if( (status = dot11fUnpackRadioMeasurementRequest( pMac, &pBody[arg2][0], size[arg2], &frm )) != 0 )
                p += log_sprintf( pMac, p, "failed to unpack.....status = %x\n", status);
             else
-               rrmProcessRadioMeasurementRequest( pMac, psessionEntry->bssId, frm, psessionEntry );
-            vos_mem_free(frm);
+               rrmProcessRadioMeasurementRequest( pMac, psessionEntry->bssId, &frm, psessionEntry );
          }
          break;
       case 4:
          {
-            tDot11fNeighborReportResponse *frm =
-                    vos_mem_malloc(sizeof(tDot11fNeighborReportResponse));
-            if (!frm)
-            {
-                p += log_sprintf(pMac, p,
-                            "Unable to allocate memory to process command\n");
-                break;
-            }
+            tDot11fNeighborReportResponse frm;
             pBody[arg2][2] = (tANI_U8)arg3; //Dialog Token
-            if( (status = dot11fUnpackNeighborReportResponse( pMac, &pBody[arg2][0], size[arg2], frm )) != 0 )
+            if( (status = dot11fUnpackNeighborReportResponse( pMac, &pBody[arg2][0], size[arg2], &frm )) != 0 )
                p += log_sprintf( pMac, p, "failed to unpack.....status = %x\n", status);
             else
-               rrmProcessNeighborReportResponse( pMac, frm, psessionEntry );
-            vos_mem_free(frm);
+               rrmProcessNeighborReportResponse( pMac, &frm, psessionEntry );
+
          }
          break;
       case 5:

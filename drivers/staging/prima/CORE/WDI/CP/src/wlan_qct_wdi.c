@@ -7163,10 +7163,7 @@ WDI_ProcessBSSSessionJoinReq
 
   halJoinReqMsg.joinReqParams.linkState = pwdiJoinParams->wdiReqInfo.linkState;
 
-#ifdef WLAN_FEATURE_VOWIFI
-  halJoinReqMsg.joinReqParams.maxTxPower =
-    pwdiJoinParams->wdiReqInfo.wdiChannelInfo.cMaxTxPower;
-#else
+#ifndef WLAN_FEATURE_VOWIFI
   halJoinReqMsg.joinReqParams.ucLocalPowerConstraint =
     pwdiJoinParams->wdiReqInfo.wdiChannelInfo.ucLocalPowerConstraint;
 #endif
@@ -10437,7 +10434,7 @@ WDI_ProcessConfigStaReq
 
   wpalMemoryCopy( pSendBuffer+usDataOffset,
                   &halConfigStaReqMsg.uStaParams,
-                  uMsgSize);
+                  sizeof(halConfigStaReqMsg.uStaParams));
 
   pWDICtx->wdiReqStatusCB     = pwdiConfigSTAParams->wdiReqStatusCB;
   pWDICtx->pReqStatusUserData = pwdiConfigSTAParams->pUserData;

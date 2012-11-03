@@ -2430,8 +2430,7 @@ static int iw_set_priv(struct net_device *dev,
        pr_info("%s: req [%s] len [%d]\n", __FUNCTION__, cmd, cmd_len);
     }
 
-    hddLog(VOS_TRACE_LEVEL_INFO_MED,
-           "%s: ***Received %s cmd from Wi-Fi GUI***", __func__, cmd);
+    hddLog(VOS_TRACE_LEVEL_INFO_MED, "***Received %s cmd from Wi-Fi GUI***", cmd);
 
     if (pHddCtx->isLogpInProgress) {
        if (ioctl_debug)
@@ -2599,14 +2598,6 @@ static int iw_set_priv(struct net_device *dev,
         /*TODO: rxfilter-remove*/
     }
 #ifdef FEATURE_WLAN_SCAN_PNO
-    else if( strncasecmp(cmd, "pnosetup", 8) == 0 ) {
-        hddLog( VOS_TRACE_LEVEL_INFO, "pnosetup");
-        /*TODO: support pnosetup*/
-    }
-    else if( strncasecmp(cmd, "pnoforce", 8) == 0 ) {
-        hddLog( VOS_TRACE_LEVEL_INFO, "pnoforce");
-        /*TODO: support pnoforce*/
-    }
     else if( strncasecmp(cmd, "pno",3) == 0 ) {
 
         hddLog( VOS_TRACE_LEVEL_INFO, "pno\n");
@@ -2659,8 +2650,7 @@ static int iw_set_priv(struct net_device *dev,
         }
     }
     else {
-        hddLog( VOS_TRACE_LEVEL_WARN, "%s: Unsupported GUI command %s",
-                __func__, cmd);
+        hddLog( VOS_TRACE_LEVEL_WARN, "Unsupported GUI command %s", cmd);
     }
 done:
     /* many of the commands write information back into the command
