@@ -16,7 +16,6 @@
 
 #include <linux/device.h>
 
-
 enum wcnss_opcode {
 	WCNSS_WLAN_SWITCH_OFF = 0,
 	WCNSS_WLAN_SWITCH_ON,
@@ -56,7 +55,5 @@ void wcnss_allow_suspend(void);
 void wcnss_prevent_suspend(void);
 #define wcnss_wlan_get_drvdata(dev) dev_get_drvdata(dev)
 #define wcnss_wlan_set_drvdata(dev, data) dev_set_drvdata((dev), (data))
-/* Option 2 + */
-void wcnss_get_wlan_vos_memory(void **ptr, size_t *size);
-/* Option 2 - */
+
 #endif /* _WCNSS_WLAN_H_ */
