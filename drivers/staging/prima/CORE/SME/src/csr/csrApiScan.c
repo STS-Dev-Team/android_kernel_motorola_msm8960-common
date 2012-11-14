@@ -1934,8 +1934,39 @@ eHalStatus csrScanGetResult(tpAniSirGlobal pMac, tCsrScanResultFilter *pFilter, 
     return (status);
 }
 
+/*
+ * NOTE: This routine is being added to make
+ * sure that scan results are not being flushed
+ * while roaming. If the scan results are flushed,
+ * we are unable to recover from
+ * csrRoamRoamingStateDisassocRspProcessor.
+ * If it is needed to remove this routine,
+ * first ensure that we recover gracefully from 
+ * csrRoamRoamingStateDisassocRspProcessor if 
+ * csrScanGetResult returns with a failure because 
+ * of not being able to find the roaming BSS.
+ */
+tANI_U8 csrScanFlushDenied(tpAniSirGlobal pMac)
+{
+    switch(pMac->roam.neighborRoamInfo.neighborRoamState) {
+        case eCSR_NEIGHBOR_ROAM_STATE_REPORT_SCAN:
+        case eCSR_NEIGHBOR_ROAM_STATE_PREAUTHENTICATING:
+        case eCSR_NEIGHBOR_ROAM_STATE_PREAUTH_DONE:
+        case eCSR_NEIGHBOR_ROAM_STATE_REASSOCIATING:
+            return (pMac->roam.neighborRoamInfo.neighborRoamState);
+        default:
+            return 0;
+    }
+}
+
 eHalStatus csrScanFlushResult(tpAniSirGlobal pMac)
 {
+    tANI_U8 isFlushDenied = csrScanFlushDenied(pMac);
+    if (isFlushDenied) {
+        smsLog(pMac, LOGW, "%s: scan flush denied in roam state %d",
+                __func__, isFlushDenied);
+        return eHAL_STATUS_FAILURE;
+    }
     return ( csrLLScanPurgeResult(pMac, &pMac->scan.scanResultList) );
 }
 
@@ -2818,29 +2849,35 @@ void csrApplyChannelPowerCountryInfo( tpAniSirGlobal pMac, tCsrChannel *pChannel
         tempNumChannels = CSR_MIN(pChannelList->numChannels, WNI_CFG_VALID_CHANNEL_LIST_LEN);
         /* If user doesn't want to scan the DFS channels lets trim them from 
         the valid channel list*/
-        if(FALSE == pMac->scan.fEnableDFSChnlScan)
+        for(i = 0; i< tempNumChannels; i++)
         {
-            for(i = 0; i< tempNumChannels; i++)
-            {
+             if(FALSE == pMac->scan.fEnableDFSChnlScan)
+             {
                  channelEnabledType = 
                      vos_nv_getChannelEnabledState(pChannelList->channelList[i]);
-                 if( NV_CHANNEL_ENABLE ==  channelEnabledType)
+             }
+             else
+             {
+                channelEnabledType = NV_CHANNEL_ENABLE;
+             }
+             if( NV_CHANNEL_ENABLE ==  channelEnabledType)
+             {
+                // Ignore the channel 165 for the country INDONESIA 
+                if ( vos_mem_compare(countryCode, "ID", VOS_COUNTRY_CODE_LEN ) 
+                      && ( pChannelList->channelList[i] == 165 )
+                      && ( pMac->scan.fIgnore_chan165 == VOS_TRUE ))
                  {
-                     ChannelList.channelList[numChannels] =
-                         pChannelList->channelList[i];
+                     continue;
+                 }
+                 else
+                 {
+                     ChannelList.channelList[numChannels] = pChannelList->channelList[i];
                      numChannels++;
                  }
-            }
-            ChannelList.numChannels = numChannels;
+             }
         }
-        else
-        {
-            ChannelList.numChannels = tempNumChannels;
-             vos_mem_copy(ChannelList.channelList,
-                          pChannelList->channelList,
-                          ChannelList.numChannels);
-        }
-
+        ChannelList.numChannels = numChannels;   
+   
         csrSetCfgValidChannelList(pMac, ChannelList.channelList, ChannelList.numChannels);
         // extend scan capability
         csrSetCfgScanControlList(pMac, countryCode, &ChannelList);     //  build a scan list based on the channel list : channel# + active/passive scan

@@ -327,7 +327,7 @@ eHalStatus csrOpen(tpAniSirGlobal pMac)
             pMac->scan.countryCodeDefault[1] = 'S';
             pMac->scan.countryCodeDefault[2] = 'I';
             //status = eHAL_STATUS_SUCCESS;
-        }
+        }        
         smsLog( pMac, LOGE, FL(" country Code from nvRam %s\n"), pMac->scan.countryCodeDefault );
         csrGetRegulatoryDomainForCountry(pMac, pMac->scan.countryCodeDefault, &regId);
         WDA_SetRegDomain(pMac, regId);
@@ -1280,6 +1280,7 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
 #ifdef WLAN_FEATURE_11AC
         pMac->roam.configParam.nVhtChannelWidth = pParam->nVhtChannelWidth;
 #endif
+        pMac->scan.fIgnore_chan165 = pParam->fIgnore_chan165;
     }
     
     return status;
@@ -1338,6 +1339,7 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
         pParam->fValidateList = pMac->roam.configParam.fValidateList;
         pParam->fEnableBypass11d = pMac->scan.fEnableBypass11d;
         pParam->fEnableDFSChnlScan = pMac->scan.fEnableDFSChnlScan;
+        pParam->fIgnore_chan165= pMac->scan.fIgnore_chan165;
         pParam->fScanTwice = pMac->roam.configParam.fScanTwice;
         pParam->fFirstScanOnly2GChnl = pMac->scan.fFirstScanOnly2GChnl;
 
@@ -9150,9 +9152,10 @@ eHalStatus csrRoamLostLink( tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U32 ty
         }
 #endif
     smsLog(pMac, LOGW, FL("roamInfo.staId (%d)\n"), roamInfo.staId);
-    csrRoamCallCallback(pMac, sessionId, &roamInfo, 0, eCSR_ROAM_LOSTLINK, result);
     if(fToRoam)
     {
+        //Tell HDD about the lost link
+        csrRoamCallCallback(pMac, sessionId, &roamInfo, 0, eCSR_ROAM_LOSTLINK, result);
         //Only remove the connected BSS in infrastructure mode
         csrRoamRemoveConnectedBssFromScanCache(pMac, &pSession->connectedProfile);
         //Not to do anying for lostlink with WDS
@@ -9206,6 +9209,7 @@ eHalStatus csrRoamLostLink( tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U32 ty
             palCopyMemory(pMac->hHdd, roamInfo.peerMac, pDeauthIndMsg->peerMacAddr, sizeof(tSirMacAddr));
             roamInfo.staId = (tANI_U8)pDeauthIndMsg->staId;
         }
+        //Tell HDD about the lost link
         csrRoamCallCallback(pMac, sessionId, &roamInfo, 0, eCSR_ROAM_LOSTLINK, result);
        
         /*No need to start idle scan in case of IBSS/SAP 
@@ -14676,9 +14680,9 @@ eHalStatus csrRoamIssueFTPreauthReq(tHalHandle hHal, tANI_U32 sessionId, tpSirBs
     {
         pftPreAuthReq->ft_ies_length = 0; 
     }
-    vos_mem_copy(pftPreAuthReq->pbssDescription, pBssDescription, pBssDescription->length);
-    pftPreAuthReq->length = pal_cpu_to_be16(sizeof(tSirFTPreAuthReq) + sizeof(pBssDescription->length) +
-                                                    pBssDescription->length); 
+    vos_mem_copy(pftPreAuthReq->pbssDescription, pBssDescription,
+                 sizeof(pBssDescription->length) + pBssDescription->length);
+    pftPreAuthReq->length = pal_cpu_to_be16(auth_req_len); 
     return palSendMBMessage(pMac->hHdd, pftPreAuthReq);
 }
 /*--------------------------------------------------------------------------
