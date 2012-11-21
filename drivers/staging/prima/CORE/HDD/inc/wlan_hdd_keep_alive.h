@@ -49,7 +49,6 @@ typedef struct
     v_U8_t  hostIpv4Addr[4]; 
     v_U8_t  destIpv4Addr[4];
     v_U8_t  destMacAddr [6];
-    v_U8_t  bssIdx;
 } tKeepAliveRequest, *tpKeepAliveRequest;
 
 #endif // __WLAN_HDD_KEEP_ALIVE_H__

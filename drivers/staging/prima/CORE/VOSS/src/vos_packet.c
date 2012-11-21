@@ -186,6 +186,14 @@ static void vos_pkti_replenish_raw_pool(void)
       return;
    }
 
+   if ((gpVosPacketContext->rxReplenishListCount < VPKT_RX_REPLENISH_THRESHOLD)
+       &&
+       (!list_empty(&gpVosPacketContext->rxRawFreeList)))
+   {
+      mutex_unlock(&gpVosPacketContext->mlock);
+      return;
+   }
+
    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
              "VPKT [%d]: Packet replenish activated", __LINE__);
 
@@ -623,6 +631,7 @@ VOS_STATUS vos_pkt_get_packet( vos_pkt_t **ppPacket,
    struct list_head *pPktFreeList;
    vos_pkt_low_resource_info *pLowResourceInfo;
    struct vos_pkt_t *pVosPacket;
+   
    // Validate the return parameter pointer
    if (unlikely(NULL == ppPacket))
    {
@@ -1364,7 +1373,9 @@ VOS_STATUS vos_pkt_return_packet( vos_pkt_t *pPacket )
                    "VPKT [%d]: [%p] Packet returned, type %d[%s]",
                    __LINE__, pPacket, pPacket->packetType,
                    vos_pkti_packet_type_str(pPacket->packetType));
+
          mutex_lock(&gpVosPacketContext->mlock);
+
          list_add_tail(&pPacket->node, pPktFreeList);
          mutex_unlock(&gpVosPacketContext->mlock);
         

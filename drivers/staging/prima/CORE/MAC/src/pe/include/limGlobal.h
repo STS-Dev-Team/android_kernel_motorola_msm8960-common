@@ -20,7 +20,6 @@
  */
 
 /*
- *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limGlobal.h contains the definitions exported by
  * LIM module.
@@ -363,7 +362,6 @@ typedef struct sLimMlmScanReq
 
 #ifdef WLAN_FEATURE_P2P
     tANI_BOOLEAN   p2pSearch;
-    tANI_BOOLEAN   skipDfsChnlInP2pSearch;
 #endif
     tANI_U16           uIEFieldLen;
     tANI_U16           uIEFieldOffset;
@@ -460,9 +458,6 @@ typedef struct sLimMlmStaContext
     tANI_U8                 schClean:1;
     // 802.11n HT Capability in Station: Enabled 1 or DIsabled 0
     tANI_U8                 htCapability:1;
-#ifdef WLAN_FEATURE_11AC
-    tANI_U8                 vhtCapability:1;
-#endif
 } tLimMlmStaContext, *tpLimMlmStaContext;
 
 // Structure definition to hold deferred messages queue parameters
@@ -640,7 +635,7 @@ typedef struct sLimChannelSwitchInfo
 {
     tLimChannelSwitchState   state;
     tANI_U8                  primaryChannel;
-    ePhyChanBondState        secondarySubBand;
+    tAniCBSecondaryMode      secondarySubBand;
     tANI_U32                 switchCount;
     tANI_U32                 switchTimeoutValue;
     tANI_U8                  switchMode;

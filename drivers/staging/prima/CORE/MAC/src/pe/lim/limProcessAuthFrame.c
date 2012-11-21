@@ -20,7 +20,6 @@
  */
 
 /*
- *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limProcessAuthFrame.cc contains the code
  * for processing received Authentication Frame.
@@ -192,7 +191,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
 
-    //PELOG3(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG3, (tANI_U8*)pBd, ((tpHalBufDesc) pBd)->mpduDataOffset + frameLen);)
+    PELOG3(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG3, (tANI_U8*)pBd, ((tpHalBufDesc) pBd)->mpduDataOffset + frameLen);)
 
 
    
@@ -717,7 +716,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                      sizeof(tSirMacAddr));
                         mlmAuthInd.authType = (tAniAuthType)
                                               pRxAuthFrameBody->authAlgoNumber;
-                        mlmAuthInd.sessionId = psessionEntry->smeSessionId;
 
                         limPostSmeMessage(pMac,
                                           LIM_MLM_AUTH_IND,
@@ -842,8 +840,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
                             // get random bytes and use as
                             // challenge text
-                            // TODO
-                            //if( !VOS_IS_STATUS_SUCCESS( vos_rand_get_bytes( 0, (tANI_U8 *)challengeTextArray, SIR_MAC_AUTH_CHALLENGE_LENGTH ) ) )
+                            if( !VOS_IS_STATUS_SUCCESS( vos_rand_get_bytes( 0, (tANI_U8 *)challengeTextArray, SIR_MAC_AUTH_CHALLENGE_LENGTH ) ) )
                             {
                                limLog(pMac, LOGE,FL("Challenge text preparation failed in limProcessAuthFrame"));
                             }
@@ -972,24 +969,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                        MAC_ADDR_ARRAY(pHdr->sa));)
 
                 break;
-            }
-
-            if (pRxAuthFrameBody->authStatusCode ==
-                eSIR_MAC_AUTH_ALGO_NOT_SUPPORTED_STATUS)
-            {
-                /**
-                 * Interoperability workaround: Linksys WAP4400N is returning
-                 * wrong authType in OpenAuth response in case of 
-                 * SharedKey AP configuration. Pretend we don't see that,
-                 * so upper layer can fallback to SharedKey authType,
-                 * and successfully connect to the AP.
-                 */
-                if (pRxAuthFrameBody->authAlgoNumber !=
-                    pMac->lim.gpLimMlmAuthReq->authType)
-                {
-                    pRxAuthFrameBody->authAlgoNumber =
-                    pMac->lim.gpLimMlmAuthReq->authType;
-                }
             }
 
             if (pRxAuthFrameBody->authAlgoNumber !=
@@ -1161,7 +1140,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                                     encrAuthFrame,key_length);
 
                                 psessionEntry->limMlmState = eLIM_MLM_WT_AUTH_FRAME4_STATE;
-                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
+                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, 0, pMac->lim.gLimMlmState));
 
                                 limSendAuthMgmtFrame(pMac,
                                                      (tpSirMacAuthFrameBody) encrAuthFrame,
@@ -1242,7 +1221,7 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
                                 psessionEntry->limMlmState =
                                 eLIM_MLM_WT_AUTH_FRAME4_STATE;
-                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
+                                MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, 0, pMac->lim.gLimMlmState));
 
                                 limSendAuthMgmtFrame(pMac,
                                                      (tpSirMacAuthFrameBody) encrAuthFrame,
@@ -1445,7 +1424,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                                  sizeof(tSirMacAddr));
                     mlmAuthInd.authType = (tAniAuthType)
                                           pRxAuthFrameBody->authAlgoNumber;
-                    mlmAuthInd.sessionId = psessionEntry->smeSessionId;
 
                     limPostSmeMessage(pMac,
                                       LIM_MLM_AUTH_IND,
@@ -1670,10 +1648,6 @@ int limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, void *body)
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG
     limPrintMacAddr(pMac, pHdr->bssId, LOGE);
     limPrintMacAddr(pMac, pMac->ft.ftPEContext.pFTPreAuthReq->preAuthbssId, LOGE);
-    limLog(pMac,LOG2,FL("seqControl 0x%X\n"), 
-            ((pHdr->seqControl.seqNumHi << 8) | 
-            (pHdr->seqControl.seqNumLo << 4) |
-            (pHdr->seqControl.fragNum)));
 #endif
 
     // Check that its the same bssId we have for preAuth
@@ -1683,40 +1657,6 @@ int limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, void *body)
         // In this case SME if indeed has triggered a 
         // pre auth it will time out.
         return eSIR_FAILURE;
-    }
-
-    if (eANI_BOOLEAN_TRUE ==
-        pMac->ft.ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed)
-    {
-        /*
-         * This is likely a duplicate for the same pre-auth request.
-         * PE/LIM already posted a response to SME. Hence, drop it.
-         * TBD: 
-         * 1) How did we even receive multiple auth responses?
-         * 2) Do we need to delete pre-auth session? Suppose we
-         * previously received an auth resp with failure which
-         * would not have created the session and forwarded to SME.
-         * And, we subsequently received an auth resp with success
-         * which would have created the session. This will now be
-         * dropped without being forwarded to SME! However, it is
-         * very unlikely to receive auth responses from the same
-         * AP with different reason codes.
-         * NOTE: return eSIR_SUCCESS so that the packet is dropped
-         * as this was indeed a response from the BSSID we tried to 
-         * pre-auth.
-         */
-        PELOGE(limLog(pMac,LOGE,"Auth rsp already posted to SME"
-               " (session %p, FT session %p)\n", psessionEntry,
-               pMac->ft.ftPEContext.pftSessionEntry););
-        return eSIR_SUCCESS;
-    }
-    else
-    {
-        PELOGE(limLog(pMac,LOGE,"Auth rsp not yet posted to SME"
-               " (session %p, FT session %p)\n", psessionEntry,
-               pMac->ft.ftPEContext.pftSessionEntry););
-        pMac->ft.ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed =
-            eANI_BOOLEAN_TRUE;
     }
 
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG

@@ -200,9 +200,9 @@ VOS_STATUS vos_lock_acquire ( vos_lock_t* lock )
          return VOS_STATUS_SUCCESS;
       }
       // Acquire a Lock
-      mutex_lock( &lock->m_lock ); 
+      mutex_lock( &lock->m_lock );
       rc = mutex_is_locked( &lock->m_lock );
-      if (rc == 0) 
+      if (rc == 0)
       {
          VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
                 "%s: unable to lock mutex (rc = %d)", __FUNCTION__, rc);
