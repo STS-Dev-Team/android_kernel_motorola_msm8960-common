@@ -317,7 +317,7 @@ void hdd_mon_tx_mgmt_pkt(hdd_adapter_t* pAdapter)
    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
       "%s: Sending action frame to SAP to TX, Len %d", __func__, skb->len);
 
-   if (VOS_STATUS_SUCCESS != 
+   if (VOS_STATUS_SUCCESS !=
       WLANSAP_SendAction( (WLAN_HDD_GET_CTX(pAdapter))->pvosContext,
                            skb->data, skb->len, 0) )
    {
@@ -543,14 +543,7 @@ int hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #endif // HDD_WMM_DEBUG
 
    spin_lock(&pAdapter->wmm_tx_queue[ac].lock);
-   /*For every increment of 10 pkts in the queue, we inform TL about pending pkts.
-    * We check for +1 in the logic,to take care of Zero count which 
-    * occurs very frequently in low traffic cases */
-   if((pAdapter->wmm_tx_queue[ac].count + 1) % 10 == 0)
-   {
-           VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,"%s:Queue is Filling up.Inform TL again about pending packets", __FUNCTION__);
-           WLANTL_STAPktPending( (WLAN_HDD_GET_CTX(pAdapter))->pvosContext, pHddStaCtx->conn_info.staId[0], ac );
-   }
+
    //If we have already reached the max queue size, disable the TX queue
    if ( pAdapter->wmm_tx_queue[ac].count == pAdapter->wmm_tx_queue[ac].max_size)
    {
@@ -656,9 +649,6 @@ void hdd_tx_timeout(struct net_device *dev)
    //disabled either because of disassociation or low resource scenarios. In
    //case of disassociation it is ok to ignore this. But if associated, we have
    //do possible recovery here
-
-   //testing underlying data path stall
-   sme_transportDebug(0, 1);
 } 
 
 
@@ -1140,53 +1130,6 @@ VOS_STATUS hdd_tx_fetch_packet_cbk( v_VOID_t *vosContext,
    ++pAdapter->hdd_stats.hddTxRxStats.txFetchDequeued;
    ++pAdapter->hdd_stats.hddTxRxStats.txFetchDequeuedAC[ac];
 
-   if(pHddCtx->cfg_ini->thermalMitigationEnable)
-   {
-      if(mutex_lock_interruptible(&pHddCtx->tmInfo.tmOperationLock))
-      {
-         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                    "%s: Tm Lock fail", __FUNCTION__);
-         return VOS_STATUS_E_FAILURE;
-      }
-      if(WLAN_HDD_TM_LEVEL_1 < pHddCtx->tmInfo.currentTmLevel)
-      {
-         if(0 == pHddCtx->tmInfo.txFrameCount)
-         {
-            /* Just recovered from sleep timeout */
-            pHddCtx->tmInfo.lastOpenTs = timestamp;
-         }
-
-         if(((timestamp - pHddCtx->tmInfo.lastOpenTs) > (pHddCtx->tmInfo.tmAction.txOperationDuration / 10)) &&
-            (pHddCtx->tmInfo.txFrameCount >= pHddCtx->tmInfo.tmAction.txBlockFrameCountThreshold))
-         {
-            spin_lock(&pAdapter->wmm_tx_queue[ac].lock);
-            /* During TX open duration, TX frame count is larger than threshold
-             * Block TX during Sleep time */
-            netif_tx_stop_all_queues(pAdapter->dev);
-            spin_unlock(&pAdapter->wmm_tx_queue[ac].lock);
-            pHddCtx->tmInfo.lastblockTs = timestamp;
-            if(VOS_TIMER_STATE_STOPPED == vos_timer_getCurrentState(&pHddCtx->tmInfo.txSleepTimer))
-            {
-               vos_timer_start(&pHddCtx->tmInfo.txSleepTimer, pHddCtx->tmInfo.tmAction.txSleepDuration);
-            }
-         }
-         else if(((timestamp - pHddCtx->tmInfo.lastOpenTs) > (pHddCtx->tmInfo.tmAction.txOperationDuration / 10)) &&
-                 (pHddCtx->tmInfo.txFrameCount < pHddCtx->tmInfo.tmAction.txBlockFrameCountThreshold))
-         {
-            /* During TX open duration, TX frame count is less than threshold
-             * Reset count and timestamp to prepare next cycle */
-            pHddCtx->tmInfo.lastOpenTs = timestamp;
-            pHddCtx->tmInfo.txFrameCount = 0;
-         }
-         else
-         {
-            /* Do Nothing */
-         }
-         pHddCtx->tmInfo.txFrameCount++;
-      }
-      mutex_unlock(&pHddCtx->tmInfo.tmOperationLock);
-   }
-
 
 #ifdef HDD_WMM_DEBUG
    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,"%s: Valid VOS PKT returned to TL", __FUNCTION__);
@@ -1326,23 +1269,13 @@ VOS_STATUS hdd_rx_packet_cbk( v_VOID_t *vosContext,
          VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,"%s: Failure extracting skb from vos pkt", __FUNCTION__);
          return VOS_STATUS_E_FAILURE;
       }
-
-      if (WLAN_HDD_ADAPTER_MAGIC != pAdapter->magic)
-      {
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-           "Magic cookie(%x) for adapter sanity verification is invalid", pAdapter->magic);
-         return eHAL_STATUS_FAILURE;
-      }
-
+   
       skb->dev = pAdapter->dev;
       skb->protocol = eth_type_trans(skb, skb->dev);
       skb->ip_summed = CHECKSUM_UNNECESSARY;
       ++pAdapter->hdd_stats.hddTxRxStats.rxPackets;
       ++pAdapter->stats.rx_packets;
       pAdapter->stats.rx_bytes += skb->len;
-#ifdef WLAN_FEATURE_HOLD_RX_WAKELOCK
-      wake_lock_timeout(&pHddCtx->rx_wake_lock, HDD_WAKE_LOCK_DURATION);
-#endif
       rxstat = netif_rx_ni(skb);
       if (NET_RX_SUCCESS == rxstat)
       {

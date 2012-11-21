@@ -20,7 +20,6 @@
  */
 
 /*
- *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file contains the source code for CFG API functions.
  *
@@ -187,6 +186,15 @@ cfgSetInt(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 value)
         PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d\n"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
+#if 0
+    else if (((control & CFG_CTL_RESTART) && !Restarting(pMac)) ||
+             ((control & CFG_CTL_RELOAD) && !Reloading(pMac)))
+    {
+        cfgLog(pMac, LOGE, FL("Change requires a restart/reload cfg id %d state %d\n"),
+               cfgId, pMac->lim.gLimSmeState);
+        retVal = eSIR_CFG_INVALID_ID;
+    }
+#endif
     else if ((pMac->cfg.gCfgIBufMin[index] > value) ||
              (pMac->cfg.gCfgIBufMax[index] < value))
     {
@@ -948,10 +956,20 @@ cfgGetCapabilityInfo(tpAniSirGlobal pMac, tANI_U16 *pCap,tpPESession sessionEntr
     if(sessionEntry->dot11mode == WNI_CFG_DOT11_MODE_11B)
         return eSIR_SUCCESS;
 
+
+    
     // Short slot time bit
     if (systemRole == eLIM_AP_ROLE)
     {
-        pCapInfo->shortSlotTime = sessionEntry->shortSlotTimeSupported;
+        if (wlan_cfgGetInt(pMac, WNI_CFG_SHORT_SLOT_TIME, &val)
+                       != eSIR_SUCCESS)
+        {
+            cfgLog(pMac, LOGP,
+                   FL("cfg get WNI_CFG_SHORT_SLOT_TIME failed\n"));
+            return eSIR_FAILURE;
+        }
+        if (val)
+            pCapInfo->shortSlotTime = 1;
     }
     else
     {
@@ -970,8 +988,16 @@ cfgGetCapabilityInfo(tpAniSirGlobal pMac, tANI_U16 *pCap,tpPESession sessionEntr
          */
         if (val)
         {
-            pCapInfo->shortSlotTime = sessionEntry->shortSlotTimeSupported;
-        }
+            if (wlan_cfgGetInt(pMac, WNI_CFG_SHORT_SLOT_TIME, &val)
+                           != eSIR_SUCCESS)
+            {
+                cfgLog(pMac, LOGP,
+                       FL("cfg get WNI_CFG_SHORT_SLOT_TIME failed\n"));
+                return eSIR_FAILURE;
+            }
+            if (val)
+            pCapInfo->shortSlotTime = 1;
+    }
     }
 
     // Spectrum Management bit
@@ -1147,7 +1173,7 @@ Notify(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 ntfMask)
     mmhMsg.bodyval = (tANI_U32)cfgId;
     mmhMsg.bodyptr = NULL;
 
-    MTRACE(macTraceMsgTx(pMac, NO_SESSION, mmhMsg.type));
+    MTRACE(macTraceMsgTx(pMac, 0, mmhMsg.type));
 
     if ((ntfMask & CFG_CTL_NTF_SCH) != 0)
         schPostMessage(pMac, &mmhMsg);

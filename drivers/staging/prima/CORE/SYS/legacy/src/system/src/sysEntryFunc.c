@@ -167,6 +167,7 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
     vos_pkt_t  *pVosPkt = (vos_pkt_t *)pMsg->bodyptr;
     VOS_STATUS  vosStatus =
               WDA_DS_PeekRxPacketInfo( pVosPkt, (v_PVOID_t *)&pBd, VOS_FALSE );
+
     pMac->sys.gSysBbtReceived++;
 
     if ( !VOS_IS_STATUS_SUCCESS(vosStatus) )
@@ -186,7 +187,7 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
             if( (dropReason = limIsPktCandidateForDrop(pMac, pBd, subType)) != eMGMT_DROP_NO_DROP)
             {
                 PELOG1(sysLog(pMac, LOG1, FL("Mgmt Frame %d being dropped, reason: %d\n"), subType, dropReason);)
-                MTRACE(macTrace(pMac,   TRACE_CODE_RX_MGMT_DROP, NO_SESSION, dropReason);)
+                MTRACE(macTrace(pMac,   TRACE_CODE_RX_MGMT_DROP, 0, dropReason);)
                 goto fail;
             }
             //Post the message to PE Queue
@@ -197,21 +198,8 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
                 goto fail;
             }
             pMac->sys.gSysBbtPostedToLim++;
+
     }
-#ifdef FEATURE_WLAN_CCX
-    else if (type == SIR_MAC_DATA_FRAME)
-    {
-        PELOGW(sysLog(pMac, LOGW, FL("IAPP Frame...\n")););
-        //Post the message to PE Queue
-        ret = (tSirRetStatus) limPostMsgApi(pMac, pMsg);
-        if (ret != eSIR_SUCCESS)
-        {
-            PELOGE(sysLog(pMac, LOGE, FL("posting to LIM2 failed, ret %d\n"), ret);)
-            goto fail;
-        }
-        pMac->sys.gSysBbtPostedToLim++;
-    }
-#endif
     else
     {
         PELOG3(sysLog(pMac, LOG3, "BBT received Invalid type %d subType %d "
@@ -220,7 +208,8 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
         sirDumpBuf(pMac, SIR_SYS_MODULE_ID, LOG3,
                        (tANI_U8 *) pBd, WLANHAL_RX_BD_HEADER_SIZE);)
 
-        goto fail;
+            goto fail;
+
     }
 
     return eSIR_SUCCESS;

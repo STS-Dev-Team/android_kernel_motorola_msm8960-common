@@ -20,7 +20,6 @@
  */
 
 /*
- *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file utilsParser.h contains the utility function protos
  * used internally by the parser
@@ -66,9 +65,6 @@ void          ConvertWMMSchedule    (tpAniSirGlobal, tSirMacScheduleIE*,        
 tSirRetStatus ConvertWscOpaque      (tpAniSirGlobal, tSirAddie*,                 tDot11fIEWscIEOpaque*);
 #ifdef WLAN_FEATURE_P2P
 tSirRetStatus ConvertP2POpaque      (tpAniSirGlobal, tSirAddie*,                 tDot11fIEP2PIEOpaque*);
-#endif
-#ifdef WLAN_FEATURE_WFD
-tSirRetStatus ConvertWFDOpaque      (tpAniSirGlobal, tSirAddie*,                 tDot11fIEWFDIEOpaque*);
 #endif
 
 
