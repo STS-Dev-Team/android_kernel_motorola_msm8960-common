@@ -20,6 +20,7 @@
  */
 
 /*
+ *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limPropExtsUtils.h contains the definitions
  * used by all LIM modules to support proprietary features.
@@ -62,11 +63,11 @@ tANI_U8 limGetCurrentLearnChannel(tpAniSirGlobal);
 // Determine if a newly discovered BSS is TITAN-compatible
 void handleNonTitanBss( tpAniSirGlobal, tSirNeighborBssWdsInfo );
 #endif
-ePhyChanBondState limGetPhyCBState( tpAniSirGlobal );
 tStaRateMode limGetStaPeerType( tpAniSirGlobal, tpDphHashNode ,tpPESession);
-void setupCBState( tpAniSirGlobal, tAniCBSecondaryMode );
+#ifdef WLAN_FEATURE_11AC
+ePhyChanBondState  limGetHTCBState(ePhyChanBondState aniCBMode) ;
+#endif
 
-tANI_U8 limGetCurrentCBSecChannel( tpAniSirGlobal,tpPESession );
 
 #endif /* __LIM_PROP_EXTS_UTILS_H */
 

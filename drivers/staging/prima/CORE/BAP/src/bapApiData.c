@@ -340,7 +340,6 @@ WLANBAP_XlateTxDataPkt
         return vosStatus;
     }
 
-#ifdef BAP_DEBUG
     // JEZ081003: Remove this after debugging 
     // Sanity check the phy_link_handle value 
 
@@ -352,7 +351,6 @@ WLANBAP_XlateTxDataPkt
         return VOS_STATUS_E_INVAL;
     }
 
-#endif // BAP_DEBUG
 
     /* Lookup the StaId using the phy_link_handle and the BAP context */ 
 
@@ -368,7 +366,6 @@ WLANBAP_XlateTxDataPkt
         return VOS_STATUS_E_FAULT;
     }
 
-#ifdef BAP_DEBUG
     // JEZ081003: Remove this after debugging 
     // Sanity check the log_link_handle value 
     if (!BTAMP_VALID_LOG_LINK( hciACLHeader.logLinkHandle))
@@ -382,13 +379,11 @@ WLANBAP_XlateTxDataPkt
         hciACLHeader.logLinkHandle = 1;
         //return VOS_STATUS_E_INVAL;
     }
-#endif //BAP_DEBUG
 
     /* Use the log_link_handle to retrieve the logical link context */ 
     /* JEZ081006: abstract this with a proc.  So you can change the impl later */ 
     pLogLinkContext = &(pBtampCtx->btampLogLinkCtx[ hciACLHeader.logLinkHandle ]);
 
-#ifdef BAP_DEBUG
     // JEZ081003: Remove this after debugging 
     // Sanity check the log_link_handle value 
     // JEZ081113: I changed this to fail on an UNOCCUPIED entry 
@@ -400,7 +395,6 @@ WLANBAP_XlateTxDataPkt
 
         return VOS_STATUS_E_INVAL;
     }
-#endif //BAP_DEBUG
 
     // Return the AC and MetaInfo
 

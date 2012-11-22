@@ -20,8 +20,9 @@
  */
 
 /*
- * Airgo Networks, Inc proprietary. All rights reserved.
  *
+ *
+ * Airgo Networks, Inc proprietary. All rights reserved.
  * Author:              Kevin Nguyen
  * Date:                02/27/02
  * History:-

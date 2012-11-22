@@ -223,7 +223,7 @@ wpt_status wpalPacketRawTrimTail(wpt_packet *pPkt, wpt_uint32 size);
         NULL - fail.
         Otherwise the address of the starting of the buffer
 ---------------------------------------------------------------------------*/
-extern WPT_INLINE wpt_uint8 *wpalPacketGetRawBuf(wpt_packet *pPkt);
+extern wpt_uint8 *wpalPacketGetRawBuf(wpt_packet *pPkt);
 
 
 /*---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ extern WPT_INLINE wpt_uint8 *wpalPacketGetRawBuf(wpt_packet *pPkt);
         NULL - fail.
         Otherwise the address of the starting of the buffer
 ---------------------------------------------------------------------------*/
-extern WPT_INLINE wpt_status wpalPacketSetRxLength(wpt_packet *pPkt, wpt_uint32 len);
+extern wpt_status wpalPacketSetRxLength(wpt_packet *pPkt, wpt_uint32 len);
 
 
 /*---------------------------------------------------------------------------
@@ -285,6 +285,17 @@ wpt_status wpalLockPacketForTransfer( wpt_packet *pPacket);
         eWLAN_PAL_STATUS_SUCCESS - success
 ---------------------------------------------------------------------------*/
 wpt_status wpalUnlockPacket( wpt_packet *pPacket);
+
+/*---------------------------------------------------------------------------
+    wpalPacketGetFragCount – Get count of memory chains (fragments)
+                       in a packet
+    Param: 
+        pPacket – pointer to a wpt_packet
+ 
+    Return:
+        memory fragment count in a packet
+---------------------------------------------------------------------------*/
+wpt_int32 wpalPacketGetFragCount(wpt_packet *pPkt);
 
 /*---------------------------------------------------------------------------
     wpalIsPacketLocked –  Check whether the Packet is locked for DMA.

@@ -19,7 +19,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-
 #if !defined( __SMEINTERNAL_H )
 #define __SMEINTERNAL_H
 
@@ -52,6 +51,7 @@
   Type declarations
   ------------------------------------------------------------------------*/
 
+// Mask can be only have one bit set
 typedef enum eSmeCommandType 
 {
     eSmeNoCommand = 0, 

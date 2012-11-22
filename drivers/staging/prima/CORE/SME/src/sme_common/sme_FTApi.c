@@ -167,10 +167,12 @@ void sme_SetFTIEs( tHalHandle hHal, tANI_U8 sessionId, tANI_U8 *ft_ies,
 
 #if defined WLAN_FEATURE_VOWIFI_11R_DEBUG
             smsLog( pMac, LOGE, "ft_ies_length=%d\n", ft_ies_length);
+            /*
             smsLog( pMac, LOGE, "%d: New Auth ft_ies_length=%02x%02x%02x\n", 
                 current->pid, pMac->ft.ftSmeContext.auth_ft_ies[0],
                 pMac->ft.ftSmeContext.auth_ft_ies[1],
                 pMac->ft.ftSmeContext.auth_ft_ies[2]);
+                */
 #endif
             break;
 
@@ -225,10 +227,12 @@ void sme_SetFTIEs( tHalHandle hHal, tANI_U8 sessionId, tANI_U8 *ft_ies,
 #if defined WLAN_FEATURE_VOWIFI_11R_DEBUG
             smsLog( pMac, LOGE, "ft_ies_length=%d state=%d\n", ft_ies_length,
                 pMac->ft.ftSmeContext.FTState);
+            /*
             smsLog( pMac, LOGE, "%d: New Auth ft_ies_length=%02x%02x%02x\n", 
                 current->pid, pMac->ft.ftSmeContext.reassoc_ft_ies[0],
                 pMac->ft.ftSmeContext.reassoc_ft_ies[1],
                 pMac->ft.ftSmeContext.reassoc_ft_ies[2]);
+                */
 #endif
             
             break;
@@ -346,7 +350,7 @@ eHalStatus sme_FTUpdateKey( tHalHandle hHal, tCsrRoamSetKey * pFTKeyInfo )
 
     if (pFTKeyInfo == NULL) 
     {
-        smsLog( pMac, LOGE, "%s: pFTKeyInfo is NULL\n", __func__);
+        smsLog( pMac, LOGE, "%s: pFTKeyInfo is NULL\n", __FUNCTION__);
         sme_ReleaseGlobalLock( &pMac->sme );
         return eHAL_STATUS_FAILURE; 
     }
@@ -365,7 +369,7 @@ eHalStatus sme_FTUpdateKey( tHalHandle hHal, tCsrRoamSetKey * pFTKeyInfo )
        break;
           
     default:
-       smsLog( pMac, LOGE, "%s: Unhandled state=%d\n", __func__,
+       smsLog( pMac, LOGE, "%s: Unhandled state=%d\n", __FUNCTION__,
                pMac->ft.ftSmeContext.FTState);
        status = eHAL_STATUS_FAILURE;
        break;

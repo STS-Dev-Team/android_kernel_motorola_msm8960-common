@@ -176,7 +176,7 @@ WLANDXE_ChannelConfigType chanRXLowPriConfig =
    WLANDXE_CHANNEL_HANDLE_CIRCULA,
 
    /* Number of Descriptor, NOT CLEAR YET !!! */
-   256,
+   512,
 
    /* MAX num RX Buffer, NOT CLEAR YET !!! */
    1,
@@ -309,8 +309,11 @@ WLANDXE_TxCompIntConfigType txCompInt =
    /* TX Complete Interrupt enable method */
    WLANDXE_TX_COMP_INT_PER_K_FRAMES,
 
-   /* TX Low Resource remaining resource threshold */
-   5,
+   /* TX Low Resource remaining resource threshold for Low Pri Ch */
+   WLANDXE_TX_LOW_RES_THRESHOLD,
+
+   /* TX Low Resource remaining resource threshold for High Pri Ch */
+   WLANDXE_TX_LOW_RES_THRESHOLD,
 
    /* RX Low Resource remaining resource threshold */
    5,
@@ -404,10 +407,11 @@ wpt_status dxeChannelDefaultConfig
          break;
       }
    }
-   if(NULL == mappedChannel)
+
+   if((NULL == mappedChannel) || (WDTS_CHANNEL_MAX == idx))
    {
       HDXE_MSG(eWLAN_MODULE_DAL_DATA, eWLAN_PAL_TRACE_LEVEL_ERROR,
-               "dxeLinkDescAndCtrlBlk Mapped Channel Not found");
+              "%s Failed to map channel", __FUNCTION__);
       return eWLAN_PAL_STATUS_E_INVAL;
    }
 

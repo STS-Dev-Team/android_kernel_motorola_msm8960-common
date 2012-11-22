@@ -20,6 +20,7 @@
  */
 
 /*
+ *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file utilsParser.cc contains the code for parsing
  * 802.11 messages.
@@ -161,6 +162,28 @@ tSirRetStatus ConvertP2POpaque( tpAniSirGlobal      pMac,
     pOld->addIEdata[ curAddIELen++ ] = 0x6f;
     pOld->addIEdata[ curAddIELen++ ] = 0x9A;
     pOld->addIEdata[ curAddIELen++ ] = 0x09;
+    palCopyMemory( pMac->hHdd, pOld->addIEdata + curAddIELen, pNew->data, pNew->num_data );
+
+    return eSIR_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_FEATURE_WFD
+tSirRetStatus ConvertWFDOpaque( tpAniSirGlobal      pMac,
+                                tSirAddie           *pOld,
+                                tDot11fIEWFDIEOpaque *pNew )
+{
+    // This is awful, I know, but the old code just rammed the IE into
+    // an opaque array.  Note that we need to explicitly add the vendorIE and OUI !
+    tANI_U8 curAddIELen = pOld->length; 
+
+    pOld->length    = curAddIELen + pNew->num_data + 6;
+    pOld->addIEdata[ curAddIELen++ ] = 0xdd;
+    pOld->addIEdata[ curAddIELen++ ] = pNew->num_data + 4;
+    pOld->addIEdata[ curAddIELen++ ] = 0x50;
+    pOld->addIEdata[ curAddIELen++ ] = 0x6f;
+    pOld->addIEdata[ curAddIELen++ ] = 0x9A;
+    pOld->addIEdata[ curAddIELen++ ] = 0x0a;
     palCopyMemory( pMac->hHdd, pOld->addIEdata + curAddIELen, pNew->data, pNew->num_data );
 
     return eSIR_SUCCESS;

@@ -50,6 +50,9 @@
 #include <wlan_hdd_wmm.h>
 #include <wlan_hdd_cfg.h>
 #include <linux/spinlock.h>
+#ifdef WLAN_FEATURE_HOLD_RX_WAKELOCK
+#include <linux/wakelock.h>
+#endif
 #ifdef ANI_MANF_DIAG
 #include <wlan_hdd_ftm.h>
 #endif
@@ -132,6 +135,11 @@
 #define WLAN_HDD_PUBLIC_ACTION_FRAME 4
 #define WLAN_HDD_PUBLIC_ACTION_FRAME_OFFSET 24
 #define WLAN_HDD_PUBLIC_ACTION_FRAME_TYPE_OFFSET 30
+#define WLAN_HDD_P2P_SOCIAL_CHANNELS 3
+
+#ifdef WLAN_FEATURE_HOLD_RX_WAKELOCK
+#define HDD_WAKE_LOCK_DURATION 50
+#endif
 
 typedef struct hdd_tx_rx_stats_s
 {
@@ -186,6 +194,7 @@ typedef struct hdd_stats_s
    tCsrGlobalClassDStatsInfo  ClassD_stat;
    tCsrPerStaStatsInfo        perStaStats;
    hdd_tx_rx_stats_t          hddTxRxStats;
+   hdd_chip_reset_stats_t     hddChipResetStats;
 } hdd_stats_t;
 
 typedef enum
@@ -362,6 +371,41 @@ typedef enum rem_on_channel_request_type
    OFF_CHANNEL_ACTION_TX,
 }rem_on_channel_request_type_t;
 
+/* Thermal mitigation Level Enum Type */
+typedef enum
+{
+   WLAN_HDD_TM_LEVEL_0,
+   WLAN_HDD_TM_LEVEL_1,
+   WLAN_HDD_TM_LEVEL_2,
+   WLAN_HDD_TM_LEVEL_3,
+   WLAN_HDD_TM_LEVEL_4,
+   WLAN_HDD_TM_LEVEL_MAX
+} WLAN_TmLevelEnumType;
+
+/* Driver Action based on thermal mitigation level structure */
+typedef struct
+{
+   v_BOOL_t  ampduEnable;
+   v_BOOL_t  enterImps;
+   v_U32_t   txSleepDuration;
+   v_U32_t   txOperationDuration;
+   v_U32_t   txBlockFrameCountThreshold;
+} hdd_tmLevelAction_t;
+
+/* Thermal Mitigation control context structure */
+typedef struct
+{
+   WLAN_TmLevelEnumType currentTmLevel;
+   hdd_tmLevelAction_t  tmAction;
+   vos_timer_t          txSleepTimer;
+   struct mutex         tmOperationLock;
+   vos_event_t          setTmDoneEvent;
+   v_U32_t              txFrameCount;
+   v_TIME_t             lastblockTs;
+   v_TIME_t             lastOpenTs;
+   struct netdev_queue *blockedQueue;
+} hdd_thermal_mitigation_info_t;
+
 #if defined CONFIG_CFG80211
 typedef struct hdd_remain_on_chan_ctx
 {
@@ -404,13 +448,6 @@ typedef struct hdd_cfg80211_state_s
 }hdd_cfg80211_state_t;
 
 #endif
-
-typedef enum{
-    HDD_SSR_NOT_REQUIRED,
-    HDD_SSR_REQUIRED,
-    HDD_SSR_DISABLED,
-}e_hdd_ssr_required;
-
 struct hdd_station_ctx
 {
   /** Handle to the Wireless Extension State */
@@ -423,11 +460,9 @@ struct hdd_station_ctx
 
    v_BOOL_t bSendDisconnect;
 
-   /* These elements are for MAX rate report to UI feature
-    * required for some customers, controlled by ini element */
-   tANI_U8 prevAssocBSSID[WNI_CFG_BSSID_LEN];
-   tANI_U8 BSSIDSet;
-   struct rate_info  storedrateInfo; 
+#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+   int     ft_carrier_on;
+#endif
 };
 
 #define BSS_STOP    0 
@@ -539,7 +574,7 @@ typedef struct hdd_scaninfo_s
    v_U32_t waitScanResult;
 
 #ifdef WLAN_FEATURE_P2P
-   v_BOOL_t p2pSearch;
+  v_BOOL_t flushP2pScanResults;
 #endif
 
    /* Additional IE for scan */
@@ -572,6 +607,7 @@ struct hdd_adapter_s
    struct wireless_dev wdev ;
    struct cfg80211_scan_request *request ; 
 #endif
+
 #ifdef WLAN_FEATURE_P2P
    /** ops checks if Opportunistic Power Save is Enable or Not
     * ctw stores ctWindow value once we receive Opps command from 
@@ -612,6 +648,7 @@ struct hdd_adapter_s
 
    /* completion variable for Linkup Event */
    struct completion linkup_event_var;
+
 
    /* completion variable for abortscan */
    struct completion abortscan_event_var;
@@ -678,11 +715,14 @@ struct hdd_adapter_s
 #endif
    }sessionCtx;
 
+   hdd_scaninfo_t scan_info;
 #ifdef CONFIG_CFG80211
    hdd_cfg80211_state_t cfg80211State;
 #endif
+
    //Magic cookie for adapter sanity verification
    v_U32_t magic;
+   v_BOOL_t higherDtimTransition;
 };
 
 typedef struct hdd_dynamic_mcbcfilter_s
@@ -700,6 +740,7 @@ typedef struct hdd_dynamic_mcbcfilter_s
 #define WLAN_HDD_GET_HAL_CTX(pAdapter)  ((hdd_context_t*)(pAdapter->pHddCtx))->hHal
 #define WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter) &(pAdapter)->sessionCtx.ap.HostapdState
 #define WLAN_HDD_GET_CFG_STATE_PTR(pAdapter)  &(pAdapter)->cfg80211State
+#define WLAN_HDD_MAX_MC_ADDR_LIST 10
 
 typedef struct hdd_adapter_list_node
 {
@@ -713,6 +754,15 @@ typedef struct hdd_priv_data_s
    int used_len;
    int total_len;
 }hdd_priv_data_t;
+
+#ifdef WLAN_FEATURE_PACKET_FILTERING
+typedef struct multicast_addr_list
+{
+   v_U8_t isFilterApplied;
+   v_U8_t mc_cnt;
+   v_U8_t addr[WLAN_HDD_MAX_MC_ADDR_LIST][ETH_ALEN];
+} t_multicast_add_list;
+#endif
 
 /** Adapter stucture definition */
 
@@ -830,6 +880,16 @@ struct hdd_context_s
    v_MACADDR_t p2pDeviceAddress;
 #endif
 
+   /* Thermal mitigation information */
+   hdd_thermal_mitigation_info_t tmInfo;
+#ifdef WLAN_FEATURE_PACKET_FILTERING
+   t_multicast_add_list mc_addr_list;
+#endif
+
+#ifdef WLAN_FEATURE_HOLD_RX_WAKELOCK
+   struct wake_lock rx_wake_lock;
+#endif
+
    /* 
     * Framework initiated driver restarting 
     *    hdd_reload_timer   : Restart retry timer
@@ -841,7 +901,6 @@ struct hdd_context_s
    atomic_t isRestartInProgress;
    u_int8_t hdd_restart_retries;
    
-   hdd_scaninfo_t scan_info;
 };
 
 
@@ -896,6 +955,7 @@ tVOS_CON_MODE hdd_get_conparam( void );
 
 void wlan_hdd_enable_deepsleep(v_VOID_t * pVosContext);
 v_BOOL_t hdd_is_apps_power_collapse_allowed(hdd_context_t* pHddCtx);
+v_BOOL_t hdd_is_suspend_notify_allowed(hdd_context_t* pHddCtx);
 void hdd_abort_mac_scan(hdd_context_t *pHddCtx);
 #ifdef CONFIG_CFG80211
 void wlan_hdd_set_monitor_tx_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter );
@@ -906,7 +966,13 @@ void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode)
 void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter);
 void hdd_prevent_suspend(void);
 void hdd_allow_suspend(void);
-bool hdd_is_ssr_required(void);
-void hdd_set_ssr_required(e_hdd_ssr_required value);
+v_U8_t hdd_is_ssr_required(void);
+void hdd_set_ssr_required(v_U8_t value);
+
+VOS_STATUS hdd_enable_bmps_imps(hdd_context_t *pHddCtx);
+VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type);
+
+eHalStatus hdd_smeCloseSessionCallback(void *pContext);
 VOS_STATUS wlan_hdd_restart_driver(hdd_context_t *pHddCtx);
+void hdd_exchange_version_and_caps(hdd_context_t *pHddCtx);
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

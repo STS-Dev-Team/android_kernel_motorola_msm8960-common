@@ -20,6 +20,7 @@
  */
 
 /*
+ *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limSerDesUtils.h contains the utility definitions
  * LIM uses while processing messages from upper layer software
@@ -60,12 +61,12 @@ void            limMeasurementIndSerDes(tpAniSirGlobal, tANI_U8 *);
 void            limCopyNeighborInfoToCfg(tpAniSirGlobal, tSirNeighborBssInfo);
 tSirRetStatus   limWdsReqSerDes(tpAniSirGlobal, tpSirSmeSetWdsInfoReq, tANI_U8 *); 
 tSirRetStatus   limRadioInfoSerDes(tpAniSirGlobal, tpSirRadarInfo, tANI_U8 *, tANI_U16 *, tANI_U32);
-tSirRetStatus   limSmeWmStatusChangeHeaderSerDes(tpAniSirGlobal, tSirSmeStatusChangeCode, tANI_U8 *, tANI_U16 *, tANI_U32);
-tSirRetStatus   nonTitanBssFoundSerDes( tpAniSirGlobal, tpSirNeighborBssWdsInfo, tANI_U8 *, tANI_U16 * );
+tSirRetStatus   limSmeWmStatusChangeHeaderSerDes(tpAniSirGlobal, tSirSmeStatusChangeCode, tANI_U8 *, tANI_U16 *, tANI_U32, tANI_U8);
+tSirRetStatus   nonTitanBssFoundSerDes( tpAniSirGlobal, tpSirNeighborBssWdsInfo, tANI_U8 *, tANI_U16 *, tANI_U8 );
 #endif
 
 void            limPackBkgndScanFailNotify(tpAniSirGlobal, tSirSmeStatusChangeCode, 
-                                           tpSirBackgroundScanInfo, tSirSmeWmStatusChangeNtf *);
+                                           tpSirBackgroundScanInfo, tSirSmeWmStatusChangeNtf *, tANI_U8);
 
 #if (WNI_POLARIS_FW_PACKAGE == ADVANCED)
 tANI_U32 limCopyNeighborBssInfo(tpAniSirGlobal, tANI_U8 *, tpSirNeighborBssInfo);

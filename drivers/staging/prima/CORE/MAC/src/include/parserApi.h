@@ -87,10 +87,16 @@ typedef struct sSirProbeRespBeacon
     tDot11fIEQuiet            quietIE;
     tDot11fIEHTCaps           HTCaps;
     tDot11fIEHTInfo           HTInfo;
+#ifdef WLAN_FEATURE_P2P
+    tDot11fIEP2PProbeRes      P2PProbeRes;
+#endif
 #ifdef WLAN_FEATURE_VOWIFI_11R
     tANI_U8                   mdie[SIR_MDIE_SIZE];
 #endif
-
+#ifdef FEATURE_WLAN_CCX
+    tDot11fIECCXTxmitPower    ccxTxPwr;
+    tDot11fIEQBSSLoad         QBSSLoad;
+#endif
     tANI_U8                   ssidPresent;
     tANI_U8                   suppRatesPresent;
     tANI_U8                   extendedRatesPresent;
@@ -118,6 +124,12 @@ typedef struct sSirProbeRespBeacon
     tANI_U8                   mdiePresent;
 #endif
 
+#ifdef WLAN_FEATURE_11AC
+    tDot11fIEVHTCaps          VHTCaps;
+    tDot11fIEVHTOperation     VHTOperation;
+    tDot11fIEVHTExtBssLoad    VHTExtBssLoad;
+#endif
+
 } tSirProbeRespBeacon, *tpSirProbeRespBeacon;
 
 // probe Request structure
@@ -133,6 +145,10 @@ typedef struct sSirProbeReq
     tANI_U8                   extendedRatesPresent;
     tANI_U8                   wscIePresent;
     tANI_U8                   p2pIePresent;
+#ifdef WLAN_FEATURE_11AC
+    tDot11fIEVHTCaps          VHTCaps;
+#endif
+
 
 } tSirProbeReq, *tpSirProbeReq;
 
@@ -179,6 +195,15 @@ typedef struct sSirAssocReq
 
     tANI_U8                   powerCapabilityPresent;
     tANI_U8                   supportedChannelsPresent;
+#ifdef WLAN_SOFTAP_FEATURE
+    // keeing copy of assoction request received, this is 
+    // required for indicating the frame to upper layers
+    tANI_U32                  assocReqFrameLength;
+    tANI_U8*                  assocReqFrame;
+#endif
+#ifdef WLAN_FEATURE_11AC
+    tDot11fIEVHTCaps          VHTCaps;
+#endif
 } tSirAssocReq, *tpSirAssocReq;
 
 
@@ -200,6 +225,14 @@ typedef struct sSirAssocRsp
 #if defined WLAN_FEATURE_VOWIFI_11R
     tDot11fIEFTInfo           FTInfo;
     tANI_U8                   mdie[SIR_MDIE_SIZE];
+    tANI_U8                   num_RICData; 
+    tDot11fIERICDataDesc      RICData[2];
+#endif
+
+#ifdef FEATURE_WLAN_CCX
+    tANI_U8                   num_tspecs;
+    tDot11fIEWMMTSPEC         TSPECInfo[SIR_CCX_MAX_TSPEC_IES];
+    tSirMacCCXTSMIE           tsmIE;
 #endif
 
     tANI_U8                   suppRatesPresent;
@@ -212,6 +245,15 @@ typedef struct sSirAssocRsp
 #if defined WLAN_FEATURE_VOWIFI_11R
     tANI_U8                   ftinfoPresent;
     tANI_U8                   mdiePresent;
+    tANI_U8                   ricPresent;
+#endif
+#ifdef FEATURE_WLAN_CCX
+    tANI_U8                   tspecPresent;
+    tANI_U8                   tsmPresent;
+#endif    
+#ifdef WLAN_FEATURE_11AC
+    tDot11fIEVHTCaps          VHTCaps;
+    tDot11fIEVHTOperation     VHTOperation;
 #endif
 } tSirAssocRsp, *tpSirAssocRsp;
 
@@ -398,12 +440,14 @@ PopulateDot11fCapabilities2(tpAniSirGlobal         pMac,
 /// Populate a tDot11fIEChanSwitchAnn
 void
 PopulateDot11fChanSwitchAnn(tpAniSirGlobal          pMac,
-                            tDot11fIEChanSwitchAnn *pDot11f);
+                            tDot11fIEChanSwitchAnn *pDot11f,
+                            tpPESession psessionEntry);
 
 /// Populate a tDot11fIEChanSwitchAnn
 void
 PopulateDot11fExtChanSwitchAnn(tpAniSirGlobal          pMac,
-                             tDot11fIEExtChanSwitchAnn *pDot11f);
+                             tDot11fIEExtChanSwitchAnn *pDot11f,
+                             tpPESession psessionEntry);
 
 /// Populate a tDot11fIECountry
 tSirRetStatus
@@ -413,7 +457,8 @@ PopulateDot11fCountry(tpAniSirGlobal    pMac,
 /// Populated a PopulateDot11fDSParams
 tSirRetStatus
 PopulateDot11fDSParams(tpAniSirGlobal     pMac,
-                       tDot11fIEDSParams *pDot11f, tANI_U8 channel);
+                       tDot11fIEDSParams *pDot11f, tANI_U8 channel,
+                       tpPESession psessionEntry);
 
 
 /// Populated a tDot11fIEEDCAParamSet
@@ -472,7 +517,8 @@ PopulateDot11fHCF(tpAniSirGlobal  pMac,
 
 tSirRetStatus
 PopulateDot11fHTCaps(tpAniSirGlobal           pMac,
-                             tDot11fIEHTCaps *pDot11f);
+                           tpPESession      psessionEntry,
+                           tDot11fIEHTCaps *pDot11f);
 
 #ifdef WLAN_SOFTAP_FEATURE
 tSirRetStatus
@@ -649,6 +695,14 @@ void PopulateDot11fWMM(tpAniSirGlobal      pMac,
 
 void PopulateDot11fWMMCaps(tDot11fIEWMMCaps *pCaps);
 
+#ifdef FEATURE_WLAN_CCX
+void PopulateDot11TSRSIE(tpAniSirGlobal  pMac,
+                               tSirMacCCXTSRSIE     *pOld,
+                               tDot11fIECCXTrafStrmRateSet  *pDot11f,
+                               tANI_U8 rate_length);
+void PopulateDot11fReAssocTspec(tpAniSirGlobal pMac, tDot11fReAssocRequest *pReassoc, tpPESession psessionEntry);
+#endif
+
 void PopulateDot11fWMMInfoAp(tpAniSirGlobal      pMac,
                              tDot11fIEWMMInfoAp *pInfo,
                              tpPESession psessionEntry);
@@ -804,4 +858,20 @@ void PopulateFTInfo( tpAniSirGlobal      pMac,
 
 void PopulateDot11fAssocRspRates ( tpAniSirGlobal pMac, tDot11fIESuppRates *pSupp, 
       tDot11fIEExtSuppRates *pExt, tANI_U16 *_11bRates, tANI_U16 *_11aRates );
+
+int FindIELocation( tpAniSirGlobal pMac,
+                           tpSirRSNie pRsnIe,
+                           tANI_U8 EID);
+#endif
+
+#ifdef WLAN_FEATURE_11AC
+tSirRetStatus
+PopulateDot11fVHTCaps(tpAniSirGlobal  pMac, tDot11fIEVHTCaps *pDot11f);
+
+tSirRetStatus
+PopulateDot11fVHTOperation(tpAniSirGlobal  pMac, tDot11fIEVHTOperation  *pDot11f);
+
+tSirRetStatus
+PopulateDot11fVHTExtBssLoad(tpAniSirGlobal  pMac, tDot11fIEVHTExtBssLoad   *pDot11f);
+
 #endif

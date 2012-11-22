@@ -20,8 +20,8 @@
  */
 
 /*
- * Airgo Networks, Inc proprietary. All rights reserved.
  *
+ * Airgo Networks, Inc proprietary. All rights reserved.
  * Author:      Sandesh Goel
  * Date:        02/25/02
  * History:-
@@ -142,6 +142,10 @@ void pmmLowRssiHandler(tpAniSirGlobal pMac);
 
 #ifdef WLAN_FEATURE_PACKET_FILTERING
 void pmmFilterMatchCountResponseHandler(tpAniSirGlobal pMac, tpSirMsgQ limMsg);
-#endif // WLAN_FEATURE_D0PC
+#endif // WLAN_FEATURE_PACKET_FILTERING
+
+#ifdef WLAN_FEATURE_GTK_OFFLOAD
+void pmmGTKOffloadGetInfoResponseHandler(tpAniSirGlobal pMac, tpSirMsgQ limMsg);
+#endif // WLAN_FEATURE_GTK_OFFLOAD
 
 #endif

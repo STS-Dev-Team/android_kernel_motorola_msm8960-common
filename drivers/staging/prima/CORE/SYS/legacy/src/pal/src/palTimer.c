@@ -30,7 +30,6 @@
   
     Copyright (C) 2006 Airgo Networks, Incorporated
   
-  
     This file contains function implementations for the Platform Abstration Layer.    
   
  */

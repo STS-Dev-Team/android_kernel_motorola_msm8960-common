@@ -20,6 +20,7 @@
  */
 
 /*
+ *
  * Airgo Networks, Inc proprietary. All rights reserved.
  * This file sirTypes.h contains the common types
  *

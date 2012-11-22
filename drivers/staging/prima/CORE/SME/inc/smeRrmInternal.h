@@ -19,7 +19,8 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-
+/*
+ * */
 #if !defined( __SMERRMINTERNAL_H )
 #define __SMERRMINTERNAL_H
 
@@ -83,7 +84,7 @@ typedef struct sRrmNeighborRequestControlInfo
 
 typedef struct sRrmSMEContext
 {
-   tANI_U8 token;
+   tANI_U16 token;
    tCsrBssid sessionBssId;
    tANI_U8 regClass;
    tCsrChannelInfo channelList; //list of all channels to be measured.

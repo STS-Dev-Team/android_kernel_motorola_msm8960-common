@@ -20,7 +20,6 @@
  */
 
 /*
- * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limAssocUtils.h contains the utility definitions
  * LIM uses while processing Re/Association messages.
  * Author:        Chandra Modumudi
@@ -60,18 +59,42 @@ void            limRejectAssociation(tpAniSirGlobal , tSirMacAddr, tANI_U8,
                                      tANI_U8 , tAniAuthType,
                                      tANI_U16, tANI_U8, tSirResultCodes, tpPESession);
 
+#ifdef WLAN_FEATURE_11AC
+tSirRetStatus limPopulateOwnRateSet(tpAniSirGlobal pMac,
+                                         tpSirSupportedRates pRates,
+                                         tANI_U8* pSupportedMCSSet,
+                                         tANI_U8 basicOnly,
+                                         tpPESession psessionEntry,
+                                         tDot11fIEVHTCaps *pVHTCaps);
+
+#else
 tSirRetStatus limPopulateOwnRateSet(tpAniSirGlobal pMac,
                                                                 tpSirSupportedRates pRates,
                                                                 tANI_U8* pSupportedMCSSet,
                                                                 tANI_U8 basicOnly,
                                                                 tpPESession psessionEntry);
+#endif
 
+#ifdef WLAN_FEATURE_11AC
+tSirRetStatus
+limPopulateMatchingRateSet(tpAniSirGlobal pMac,
+                           tpDphHashNode pStaDs,
+                           tSirMacRateSet *pOperRateSet,
+                           tSirMacRateSet *pExtRateSet,
+                           tANI_U8* pSupportedMCSSet,
+                           tSirMacPropRateSet *pAniLegRateSet,
+                           tpPESession  psessionEntry,
+                           tDot11fIEVHTCaps *pVHTCaps);
+#else
 tSirRetStatus   limPopulateMatchingRateSet(tpAniSirGlobal,
                                            tpDphHashNode,
                                            tSirMacRateSet *,
                                            tSirMacRateSet *,
                                            tANI_U8* pSupportedMCSSet,
                                            tSirMacPropRateSet *, tpPESession);
+
+
+#endif
 tSirRetStatus   limAddSta(tpAniSirGlobal, tpDphHashNode,tpPESession);
 tSirRetStatus   limDelBss(tpAniSirGlobal, tpDphHashNode, tANI_U16, tpPESession);
 tSirRetStatus   limDelSta(tpAniSirGlobal, tpDphHashNode, tANI_BOOLEAN, tpPESession);
@@ -87,6 +110,9 @@ void            limTeardownInfraBss(tpAniSirGlobal,tpPESession);
 void            limRestorePreReassocState(tpAniSirGlobal,
                                           tSirResultCodes,
                                           tANI_U16,tpPESession); 
+void            limPostReassocFailure(tpAniSirGlobal,
+                                      tSirResultCodes,
+                                      tANI_U16,tpPESession);
 eAniBoolean     limIsReassocInProgress(tpAniSirGlobal,tpPESession);
 void
 limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,

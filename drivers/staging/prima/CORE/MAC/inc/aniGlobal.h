@@ -90,7 +90,10 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 #include "smeRrmInternal.h"
 #include "rrmGlobal.h"
 #endif
-
+#if defined FEATURE_WLAN_CCX
+#include "ccxApi.h"
+#include "ccxGlobal.h"
+#endif
 #ifdef WLAN_FEATURE_P2P
 #include "p2p_Api.h"
 #endif
@@ -138,7 +141,11 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 #if defined WLAN_FEATURE_P2P
 #define P2P_WILDCARD_SSID "DIRECT-" //TODO Put it in proper place;
 #define P2P_WILDCARD_SSID_LEN 7
-#endif
+
+#ifdef WLAN_FEATURE_CONCURRENT_P2P
+#define MAX_NO_OF_P2P_SESSIONS  5
+#endif //WLAN_FEATURE_CONCURRENT_P2P
+#endif //WLAN_FEATURE_P2P
 
 // -------------------------------------------------------------------
 // Change channel generic scheme
@@ -203,6 +210,7 @@ typedef struct sLimTimers
     // Scan related timers
     TX_TIMER    gLimMinChannelTimer;
     TX_TIMER    gLimMaxChannelTimer;
+    TX_TIMER    gLimPeriodicProbeReqTimer;
 
     // CNF_WAIT timer
     TX_TIMER            *gpLimCnfWaitTimer;
@@ -229,6 +237,9 @@ typedef struct sLimTimers
     TX_TIMER           gLimFTPreAuthRspTimer;
 #endif
 
+#ifdef FEATURE_WLAN_CCX
+    TX_TIMER           gLimCcxTsmTimer;
+#endif
 #ifdef WLAN_FEATURE_P2P
     TX_TIMER           gLimRemainOnChannelTimer;
 #endif
@@ -535,6 +546,11 @@ typedef struct sAniSirLim
     tANI_U32 *gpLimResumeData;
 //end WLAN_SUSPEND_LINK Related
     tANI_U8    fScanDisabled;
+    //Can be set to invalid channel. If it is invalid, HAL
+    //should move to previous valid channel or stay in the
+    //current channel. CB state goes along with channel to resume to
+    tANI_U16    gResumeChannel;
+    ePhyChanBondState    gResumePhyCbState;
 #endif // GEN4_SCAN
 
     // Change channel generic scheme
@@ -560,10 +576,6 @@ typedef struct sAniSirLim
     tLimProtStaParams gLimOverlapHt20Params;
     tLimProtStaParams gLimOverlapNonGfParams;
 
-  //  tANI_U32 gLimDot11Mode;
-    tSirRFBand gLimRFBand;
-
-
     //
     // ---------------- DPH -----------------------
     // these used to live in DPH but are now moved here (where they belong)
@@ -571,7 +583,7 @@ typedef struct sAniSirLim
     tANI_U32           propRateAdjustPeriod;
     tANI_U32           scanStartTime;    // used to measure scan time
 
-    tANI_U8            gLimBssid[6];
+    //tANI_U8            gLimBssid[6];
     tANI_U8            gLimMyMacAddr[6];
     tANI_U8            ackPolicy;
 
@@ -696,7 +708,7 @@ typedef struct sAniSirLim
 
     // Place holder for Join request that we're
     // currently attempting
-    tLimMlmJoinReq       *gpLimMlmJoinReq;
+    //tLimMlmJoinReq       *gpLimMlmJoinReq;
 
     // Reason code to determine the channel change context while sending 
     // WDA_CHNL_SWITCH_REQ message to HAL       
@@ -729,27 +741,6 @@ typedef struct sAniSirLim
     //////////////////////////////////////////     ASSOC RELATED END ///////////////////////////////////////////
 
 
-    // 11h Spectrum Management Related Flag
-    tANI_U32           gLim11hEnable;
-    tLimSpecMgmtInfo   gLimSpecMgmt;
-    // CB Primary/Secondary Channel Switch Info
-    tLimChannelSwitchInfo  gLimChannelSwitch;
-
-
-    // Channel Bonding mode, as configured by SME
-    tANI_U8 gCbMode;
-
-    //
-    // Identifies the runtime OPERATIONAL state of Channel
-    // Bonding. This info is encoded as a bitmap, as
-    // configured via gCbMode.
-    //
-    //  b7  b6  b5  b4  b3  b2  b1  b0
-    // --------------------------------
-    // | X | X | X | AU|CS|U/D| O | A |
-    // --------------------------------
-    //
-    tANI_U8 gCbState;
 
     //
     // For DEBUG purposes
@@ -759,24 +750,6 @@ typedef struct sAniSirLim
     tANI_U32 gLimScanOverride;
     // Holds the desired tSirScanType, as requested by SME
     tSirScanType gLimScanOverrideSaved;
-
-    // Override with this Phy CB state always
-    //ePhyChanBondState gLimPhyCBState;
-
-    // When operating with -
-    // a) Channel Bonding mode (as configured by SME) AND
-    // b) CB State protection turned ON
-    // this object will save the CB state as desired by SME
-    //
-    // This object mimics the bitmap encoding of the
-    // gCbState object, as follows:
-    //
-    //  b7  b6  b5  b4  b3  b2  b1  b0
-    // --------------------------------
-    // | X | X | X | AU|CS|U/D| O | A |
-    // --------------------------------
-    //
-    tANI_U8 gCbStateProtected;
 
     //
     // CB State protection, operated upon as follows:
@@ -813,10 +786,6 @@ typedef struct sAniSirLim
 
 
     tANI_U8 gHTGreenfield;
-
-    //0-20Mhz
-    //1-40Mhz
-    tANI_U8 gHTSupportedChannelWidthSet;
 
     tANI_U8 gHTShortGI40Mhz;
     tANI_U8 gHTShortGI20Mhz;
@@ -878,15 +847,6 @@ typedef struct sAniSirLim
     tANI_U8 gHTRifsMode;
    // OBss Mode . set when we have Non HT STA is associated or with in overlap bss
     tANI_U8  gHTObssMode;
-    //
-    // Recommended Tx Width Set
-    // 0 - use 20 MHz channel (control channel)
-    // 1 - use channel width enabled under Supported Channel Width Set
-    //
-    tANI_U8 gHTRecommendedTxWidthSet;
-
-    // Identifies the 40 MHz extension channel
-    tSirMacHTSecondaryChannelOffset gHTSecondaryChannelOffset;
 
     // Identifies the current Operating Mode
     tSirMacHTOperatingMode gHTOperMode;
@@ -947,6 +907,12 @@ tLimMlmOemDataRsp       *gpLimMlmOemDataRsp;
     tSirRemainOnChnReq  *gpLimRemainOnChanReq; //hold remain on chan request in this buf
     vos_list_t  gLimMgmtFrameRegistratinQueue;
     tANI_U32    actionFrameSessionId;
+#endif
+    tSirBackgroundScanMode gLimBackgroundScanMode;
+#ifdef WLAN_FEATURE_11AC
+    tANI_U8    vhtCapabilityPresentInBeacon;
+    tANI_U8    apCenterChan;
+    tANI_U8    apChanWidth;
 #endif
 } tAniSirLim, *tpAniSirLim;
 
@@ -1094,7 +1060,11 @@ typedef struct sAniSirGlobal
     tRrmContext rrm;
 #endif
 #ifdef WLAN_FEATURE_P2P
+#ifdef WLAN_FEATURE_CONCURRENT_P2P
+    tp2pContext p2pContext[MAX_NO_OF_P2P_SESSIONS];
+#else
     tp2pContext p2pContext;
+#endif
 #endif
 
 #if defined WLAN_FEATURE_VOWIFI_11R

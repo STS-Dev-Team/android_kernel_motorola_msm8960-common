@@ -277,4 +277,22 @@ wpt_status wpalNotifySmsm
    wpt_uint32                            setSt
 );
 
+/**
+  @brief wpalActivateRxInterrupt activates wpalRxIsr
+
+  @param  NONE
+
+  @return NONE
+*/
+void wpalActivateRxInterrupt(void);
+
+/**
+  @brief wpalInactivateRxInterrupt inactivates wpalRxIsr
+
+  @param  NONE
+
+  @return NONE
+*/
+void wpalInactivateRxInterrupt(void);
+
 #endif /* WLAN_QCT_PAL_DEVICE_H*/

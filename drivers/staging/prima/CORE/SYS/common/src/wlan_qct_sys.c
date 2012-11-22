@@ -710,7 +710,7 @@ VOS_STATUS sysMcProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
                        "Processing SYS MC STOP" );
 
             // get the HAL context...
-            hHal = vos_get_context( VOS_MODULE_ID_SME, pVosContext );
+            hHal = vos_get_context( VOS_MODULE_ID_PE, pVosContext );
             if (NULL == hHal)
             {
                VOS_TRACE( VOS_MODULE_ID_SYS, VOS_TRACE_LEVEL_ERROR,
@@ -770,13 +770,11 @@ VOS_STATUS sysMcProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
             break;
          }
 #ifndef WLAN_FTM_STUB
-        case SYS_MSG_ID_FTM_RSP:
-        {
-#ifndef ANI_OS_TYPE_WINDOWS //TODO: remove this once WM HDD FTM code is main/lined
-                WLANFTM_McProcessMsg((v_VOID_t *)pMsg->bodyptr);
-#endif
-                break;
-        }
+         case SYS_MSG_ID_FTM_RSP:
+         {
+             WLANFTM_McProcessMsg((v_VOID_t *)pMsg->bodyptr);
+             break;
+         }
 #endif
 
          default:
@@ -992,6 +990,7 @@ VOS_STATUS sysTxProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
    return( vosStatus );
 }
 
+
 #ifdef FEATURE_WLAN_INTEGRATED_SOC
 VOS_STATUS sysRxProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
 {
@@ -1185,8 +1184,12 @@ SysProcessMmhMsg
   */
   if(VOS_STATUS_SUCCESS != vos_mq_post_message(targetMQ, (vos_msg_t*)pMsg))
   {
-     /* free the mem and return */
-     palFreeMemory( pMac->hHdd, pMsg->bodyptr);
+    //Caller doesn't allocate memory for the pMsg. It allocate memory for bodyptr
+    /* free the mem and return */
+    if(pMsg->bodyptr)
+    {
+      palFreeMemory( pMac->hHdd, pMsg->bodyptr);
+    }
   }
 
 } /* SysProcessMmhMsg() */

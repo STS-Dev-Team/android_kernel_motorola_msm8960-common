@@ -639,11 +639,12 @@ v_U32_t btampUnpackTlvAMP_Assoc_Connected_Channel(void * pCtx, v_U8_t *pBuf, v_U
     }
     else
     {
-        pDst->num_triplets = (v_U8_t)( tlvlen / 3 );
-        if (tlvlen / 3 > 2){
-                pDst->present = 0;
-                return BTAMP_SKIPPED_BAD_IE;
+        /* Maximum of 5 triplets allowed, based on size of triplets definition */
+        if (tlvlen / 3 > 5)
+        {
+            tlvlen = 15;
         }
+        pDst->num_triplets = (v_U8_t)( tlvlen / 3 );
 
         BTAMP_MEMCPY(pCtx, pDst->triplets, pBuf, ( tlvlen ) );
         pBuf += ( tlvlen );
@@ -790,23 +791,6 @@ v_U32_t btampUnpackTlvAMP_Assoc_Preferred_Channel_List(void * pCtx, v_U8_t *pBuf
     pBuf += 3;
     tlvlen -= (v_U8_t)3;
 
-    /* Next 3 bytes are fixed value per spec.
-       - Regulatory Extension Identifier (201)
-       - Regulatory Class (254)
-       - Coverage Class (0) - Not used by AMPs                                    )
-       Validate and drop the byte */
-    if ((*pBuf != WLAN_BAP_PAL_REG_EXTN_ID_VAL) && 
-        ((*pBuf + 1) != WLAN_BAP_PAL_REG_CLASS_VAL) &&
-        ((*pBuf + 2) != WLAN_BAP_PAL_COVERAGE_CLASS_VAL))
-    {
-#ifdef WLAN_BAPHCI_ENABLE_LOGGING    
-        VOS_TRACE(VOS_MODULE_ID_BAP,VOS_TRACE_LEVEL_ERROR,"Invalid preferred channel list values on %s", __FUNCTION__); 
-#endif
-        return BTAMP_BAD_FIXED_VALUE;
-    }
-    pBuf += 3;
-    tlvlen -= (v_U8_t)3;
-
     if ( ! tlvlen )
     {
         pDst->num_triplets = 0U;
@@ -814,14 +798,12 @@ v_U32_t btampUnpackTlvAMP_Assoc_Preferred_Channel_List(void * pCtx, v_U8_t *pBuf
     }
     else
     {
-        pDst->num_triplets = (v_U8_t)( tlvlen / 3 );
-        /* This magic number is based on the triplets definition */
-        /*??? not sure what this check is but it fails with correct info elements
-        if (tlvlen / 3 > 2)
+        /* Maximum of 5 triplets allowed, based on size of triplets definition */
+        if (tlvlen / 3 > 5)
         {
-            pDst->present = 0;
-            return BTAMP_SKIPPED_BAD_IE;
-        }*/
+            tlvlen = 15;
+        }
+        pDst->num_triplets = (v_U8_t)( tlvlen / 3 );
 
         BTAMP_MEMCPY(pCtx, pDst->triplets, pBuf, ( tlvlen ) );
         pBuf += ( tlvlen );

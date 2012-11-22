@@ -186,7 +186,8 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     tSirMacRateSet  basicRates;
     tANI_U8 i = 0, j = 0;
 
-    limGetPhyMode(pMac, &phyMode);
+    limGetPhyMode(pMac, &phyMode, psessionEntry);
+
     limGetQosMode(psessionEntry, &qosMode);
 
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
@@ -220,6 +221,18 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     limLog(pMac, LOGW, FL("Received AssocReq Frame: "MAC_ADDRESS_STR), MAC_ADDR_ARRAY(pHdr->sa));
 
     sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG2, (tANI_U8 *) pBody, framelen);
+
+    if( palEqualMemory( pMac->hHdd,  (tANI_U8* ) pHdr->sa, (tANI_U8 *) pHdr->da, 
+                        (tANI_U8) (sizeof(tSirMacAddr))))
+    {
+        limSendAssocRspMgmtFrame(pMac,
+                    eSIR_MAC_UNSPEC_FAILURE_STATUS,
+                    1,
+                    pHdr->sa,
+                    subType, 0,psessionEntry);
+        limLog(pMac, LOGE, FL("Rejected Assoc Req frame Since same mac as SAP/GO\n"));
+        return ;
+    }
 
 #ifdef WLAN_SOFTAP_FEATURE
     // If TKIP counter measures active send Assoc Rsp frame to station with eSIR_MAC_MIC_FAILURE_REASON
@@ -256,6 +269,15 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
         goto error;
     }
 
+    if ( palAllocateMemory(pMac->hHdd, (void **)&pAssocReq->assocReqFrame, framelen) != eHAL_STATUS_SUCCESS) 
+    {
+        limLog(pMac, LOGE, FL("Unable to allocate memory for the assoc req, length=%d from \n"),framelen);
+        goto error;
+    }
+    
+    palCopyMemory( pMac->hHdd, (tANI_U8 *) pAssocReq->assocReqFrame,
+                  (tANI_U8 *) pBody, framelen);
+    pAssocReq->assocReqFrameLength = framelen;    
 
     if (cfgGetCapabilityInfo(pMac, &temp,psessionEntry) != eSIR_SUCCESS)
     {
@@ -594,7 +616,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
     // Check for 802.11n HT caps compatibility; are HT Capabilities
     // turned on in lim?
-    if ( psessionEntry->htCapabality )
+    if ( psessionEntry->htCapability )
     {
         // There are; are they turned on in the STA?
         if ( pAssocReq->HTCaps.present )
@@ -1008,6 +1030,9 @@ sendIndToSme:
     psessionEntry->parsedAssocReq[pStaDs->assocId] = pAssocReq;
 
     pStaDs->mlmStaContext.htCapability = pAssocReq->HTCaps.present;
+#ifdef WLAN_FEATURE_11AC
+    pStaDs->mlmStaContext.vhtCapability = pAssocReq->VHTCaps.present;
+#endif
     pStaDs->qos.addtsPresent = (pAssocReq->addtsPresent==0) ? false : true;
     pStaDs->qos.addts        = pAssocReq->addtsReq;
     pStaDs->qos.capability   = pAssocReq->qosCapability;
@@ -1063,10 +1088,30 @@ sendIndToSme:
         pStaDs->htShortGI20Mhz = (tANI_U8)pAssocReq->HTCaps.shortGI20MHz;
         pStaDs->htShortGI40Mhz = (tANI_U8)pAssocReq->HTCaps.shortGI40MHz;
         pStaDs->htSupportedChannelWidthSet = (tANI_U8)pAssocReq->HTCaps.supportedChannelWidthSet;
+        /* peer just follows AP; so when we are softAP/GO, we just store our session entry's secondary channel offset here in peer INFRA STA
+         * However, if peer's 40MHz channel width support is disabled then secondary channel will be zero
+         */
+        pStaDs->htSecondaryChannelOffset = (pStaDs->htSupportedChannelWidthSet)?psessionEntry->htSecondaryChannelOffset:0;
+#ifdef WLAN_FEATURE_11AC
+        if (pAssocReq->VHTCaps.present)
+        {
+            pStaDs->vhtSupportedChannelWidthSet = (tANI_U8)pAssocReq->VHTCaps.supportedChannelWidthSet; 
+        }
+#endif
         pStaDs->baPolicyFlag = 0xFF;
     }
 
 
+#ifdef WLAN_FEATURE_11AC
+if (limPopulateMatchingRateSet(pMac,
+                               pStaDs,
+                               &(pAssocReq->supportedRates),
+                               &(pAssocReq->extendedRates),
+                               pAssocReq->HTCaps.supportedMCSSet,
+                               &(pAssocReq->propIEinfo.propRates),
+                               psessionEntry , &pAssocReq->VHTCaps) 
+                               != eSIR_SUCCESS)
+#else
 
     if (limPopulateMatchingRateSet(pMac,
                                    pStaDs,
@@ -1074,6 +1119,7 @@ sendIndToSme:
                                    &(pAssocReq->extendedRates),
                                    pAssocReq->HTCaps.supportedMCSSet,
                                    &(pAssocReq->propIEinfo.propRates), psessionEntry) != eSIR_SUCCESS)
+#endif
     {
         // Could not update hash table entry at DPH with rateset
         limLog(pMac, LOGE,
@@ -1245,6 +1291,12 @@ sendIndToSme:
 error:
     if (pAssocReq != NULL)
     {
+        if ( pAssocReq->assocReqFrame ) 
+        {
+            palFreeMemory(pMac->hHdd, pAssocReq->assocReqFrame);
+            pAssocReq->assocReqFrame = NULL;
+        }
+
         if (palFreeMemory(pMac->hHdd, pAssocReq) != eHAL_STATUS_SUCCESS) 
         {
             limLog(pMac, LOGP, FL("PalFree Memory failed \n"));
@@ -1283,7 +1335,7 @@ error:
 ------------------------------------------------------------------*/
 void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession psessionEntry)
 {
-    tpLimMlmAssocInd        pMlmAssocInd;
+    tpLimMlmAssocInd        pMlmAssocInd = NULL;
     tpLimMlmReassocInd      pMlmReassocInd;
     tpSirAssocReq           pAssocReq;
     tANI_U16                temp;
@@ -1300,7 +1352,7 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
     pAssocReq = (tpSirAssocReq) psessionEntry->parsedAssocReq[pStaDs->assocId];
 
     // Get the phyMode
-    limGetPhyMode(pMac, &phyMode);
+    limGetPhyMode(pMac, &phyMode, psessionEntry);
  
     // Extract pre-auth context for the peer BTAMP-STA, if any.
  
@@ -1389,10 +1441,6 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
                            pAssocReq->rsn.length);
         }
 
-        //FIXME: we need to have the cb information seprated between HT and Titan later. 
-        if(pAssocReq->HTCaps.present)
-            limGetHtCbAdminState(pMac, pAssocReq->HTCaps, &pMlmAssocInd->titanHtCaps);
-
         // Fill in 802.11h related info
         if (pAssocReq->powerCapabilityPresent && pAssocReq->supportedChannelsPresent)
         {
@@ -1458,6 +1506,13 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
 
         }
 #endif
+
+        // Required for indicating the frames to upper layer
+        pMlmAssocInd->assocReqLength = pAssocReq->assocReqFrameLength;
+        pMlmAssocInd->assocReqPtr = pAssocReq->assocReqFrame;
+        
+        pMlmAssocInd->beaconPtr = psessionEntry->beacon;
+        pMlmAssocInd->beaconLength = psessionEntry->bcnLen;
 
         limPostSmeMessage(pMac, LIM_MLM_ASSOC_IND, (tANI_U32 *) pMlmAssocInd);
         palFreeMemory( pMac->hHdd, pMlmAssocInd);
@@ -1540,9 +1595,6 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
             palCopyMemory( pMac->hHdd, &pMlmReassocInd->rsnIE.rsnIEdata[2], pAssocReq->rsn.info, pAssocReq->rsn.length);
         }
 
-        if(pAssocReq->HTCaps.present)
-              limGetHtCbAdminState(pMac, pAssocReq->HTCaps,  &pMlmReassocInd->titanHtCaps );
-
         // 802.11h support
         if (pAssocReq->powerCapabilityPresent && pAssocReq->supportedChannelsPresent)
         {
@@ -1617,6 +1669,13 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
 
         }
 #endif
+
+        // Required for indicating the frames to upper layer
+        pMlmReassocInd->assocReqLength = pAssocReq->assocReqFrameLength;
+        pMlmReassocInd->assocReqPtr = pAssocReq->assocReqFrame;
+
+        pMlmReassocInd->beaconPtr = psessionEntry->beacon;
+        pMlmReassocInd->beaconLength = psessionEntry->bcnLen;
 
         limPostSmeMessage(pMac, LIM_MLM_REASSOC_IND, (tANI_U32 *) pMlmReassocInd);
         palFreeMemory( pMac->hHdd, pMlmReassocInd);

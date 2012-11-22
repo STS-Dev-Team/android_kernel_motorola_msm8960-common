@@ -19,6 +19,8 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+/*
+ * */
 #ifndef _HALMSGAPI_H_
 #define _HALMSGAPI_H_
 
@@ -300,6 +302,11 @@ typedef struct
     tANI_U8     p2pCapableSta;
 #endif
 
+#ifdef WLAN_FEATURE_11AC
+    tANI_U8    vhtCapable;
+    tANI_U8    vhtTxChannelWidthSet;
+#endif
+
 } tAddStaParams, *tpAddStaParams;
 
 
@@ -503,7 +510,10 @@ typedef struct
 
     //Spectrum Management Capability, 1 - Enabled, 0 - Disabled.
     tANI_U8 bSpectrumMgtEnabled;
-
+#ifdef WLAN_FEATURE_11AC
+    tANI_U8 vhtCapable;
+    tANI_U8    vhtTxChannelWidthSet;
+#endif
 } tAddBssParams, * tpAddBssParams;
 
 typedef struct
@@ -939,15 +949,21 @@ typedef struct
 #ifndef WLAN_FEATURE_VOWIFI    
     tANI_U8 localPowerConstraint;
 #endif /* WLAN_FEATURE_VOWIFI  */
-    tSirMacHTSecondaryChannelOffset secondaryChannelOffset;
+    ePhyChanBondState secondaryChannelOffset;
     tANI_U8 peSessionId;
 #if defined WLAN_FEATURE_VOWIFI
     tPowerdBm txMgmtPower; //HAL fills in the tx power used for mgmt frames in this field.
     tPowerdBm maxTxPower;
     tSirMacAddr selfStaMacAddr;
-    tSirMacAddr bssId;  // BSSID is needed to identify which session issued this request. As 
                         //the request has power constraints, this should be applied only to that session
 #endif
+    /* VO Wifi comment: BSSID is needed to identify which session issued this request. As the 
+       request has power constraints, this should be applied only to that session */
+    /* V IMP: Keep bssId field at the end of this msg. It is used to mantain backward compatbility
+     * by way of ignoring if using new host/old FW or old host/new FW since it is at the end of this struct
+     */
+    tSirMacAddr bssId;
+
     eHalStatus status;
 
 }tSwitchChannelParams, *tpSwitchChannelParams;
@@ -1145,6 +1161,7 @@ typedef struct sExitBmpsParams
 {
     tANI_U8     sendDataNull;
     eHalStatus  status;
+    tANI_U8     bssIdx;
 } tExitBmpsParams, *tpExitBmpsParams;
 
 //
@@ -1162,6 +1179,7 @@ typedef struct sUapsdParams
     tANI_U8     viTriggerEnabled:1;
     tANI_U8     voTriggerEnabled:1;
     eHalStatus  status;
+    tANI_U8     bssIdx;
 }tUapsdParams, *tpUapsdParams;
 
 //
@@ -1249,6 +1267,12 @@ typedef struct sEnterBmpsParams
     //DTIM period given to HAL during association may not be valid,
     //if association is based on ProbeRsp instead of beacon.
     tANI_U8 dtimPeriod;
+
+    // For CCX and 11R Roaming
+    tANI_U8  bRssiFilterEnable;
+    tANI_U32 rssiFilterPeriod;
+    tANI_U32 numBeaconPerRssiAverage;
+
     eHalStatus status;
     tANI_U8 respReqd;
 }tEnterBmpsParams, *tpEnterBmpsParams;

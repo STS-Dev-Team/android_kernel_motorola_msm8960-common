@@ -206,20 +206,21 @@ WDI_Status WDI_DS_TxPacket(void *pContext,
 /* DAL Transmit Complete function. 
  * Parameters:
  *  pContext:Cookie that should be passed back to the caller along with the callback.
+ *  ucTxResReq:TX resource number required by TL
  * Return Value: SUCCESS  Completed successfully.
  *     FAILURE_XXX  Request was rejected due XXX Reason.
  *
  */
 
 
-WDI_Status WDI_DS_TxComplete(void *pContext)
+WDI_Status WDI_DS_TxComplete(void *pContext, wpt_uint32 ucTxResReq)
 {
   // Do Sanity checks
   if(NULL == pContext)
     return WDI_STATUS_E_FAILURE;
   
   // Send notification to transport layer.
-  if(eWLAN_PAL_STATUS_SUCCESS !=WDTS_CompleteTx(pContext))
+  if(eWLAN_PAL_STATUS_SUCCESS !=WDTS_CompleteTx(pContext, ucTxResReq))
   {
     return WDI_STATUS_E_FAILURE;
   }  
@@ -267,10 +268,12 @@ WDI_Status WDI_DS_TxResume(void *pContext)
 }
 
 /* DAL Get Available Resource Count. 
+ * This is the number of free descririptor in DXE
  * Parameters:
  *  pContext:Cookie that should be passed back to the caller along with the callback.
  *  wdiResPool: - identifier of resource pool
  * Return Value: number of resources available
+ *               This is the number of free descririptor in DXE
  *
  */
 
@@ -278,12 +281,13 @@ wpt_uint32 WDI_GetAvailableResCount(void *pContext,WDI_ResPoolType wdiResPool)
 {
   WDI_DS_ClientDataType *pClientData =  
     (WDI_DS_ClientDataType *) WDI_DS_GetDatapathContext(pContext);
+
   switch(wdiResPool)
   {
     case WDI_MGMT_POOL_ID:
-      return (WDI_DS_HI_PRI_RES_NUM - WDI_DS_GetAvailableResCount(&pClientData->mgmtMemPool));
+      return (WDI_DS_HI_PRI_RES_NUM - 2*WDI_DS_GetAvailableResCount(&pClientData->mgmtMemPool));
     case WDI_DATA_POOL_ID:
-      return (WDI_DS_LO_PRI_RES_NUM - WDI_DS_GetAvailableResCount(&pClientData->dataMemPool));
+      return WDTS_GetFreeTxDataResNumber(pContext);
     default:
       return 0;
   }

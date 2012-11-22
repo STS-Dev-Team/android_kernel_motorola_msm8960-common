@@ -102,6 +102,7 @@
 /*---------------------------------------------------------------------------
  * Data definitions
  * ------------------------------------------------------------------------*/
+static VosContextType  gVosContext;
 static pVosContextType gpVosContext;
 
 /*---------------------------------------------------------------------------
@@ -150,7 +151,7 @@ VOS_STATUS vos_preOpen ( v_CONTEXT_t *pVosContext )
 
    /* Allocate the VOS Context */
    *pVosContext = NULL;
-   gpVosContext = (VosContextType*) kmalloc(sizeof(VosContextType), GFP_KERNEL);
+   gpVosContext = &gVosContext;
 
    if (NULL == gpVosContext)
    {
@@ -204,10 +205,6 @@ VOS_STATUS vos_preClose( v_CONTEXT_t *pVosContext )
                 "%s: Context mismatch", __func__);
       return VOS_STATUS_E_FAILURE;
    }
-
-   /* Free the VOS Context */
-   if(gpVosContext != NULL)
-      kfree(gpVosContext);
 
    *pVosContext = gpVosContext = NULL;
 
@@ -907,34 +904,23 @@ err_mac_stop:
 #ifdef FEATURE_WLAN_INTEGRATED_SOC
 err_wda_stop:   
   vos_event_reset( &(gpVosContext->wdaCompleteEvent) );
-  vStatus = WDA_stop( pVosContext, HAL_STOP_TYPE_RF_KILL);
-  if (!VOS_IS_STATUS_SUCCESS(vStatus))
+  WDA_stop( pVosContext, HAL_STOP_TYPE_RF_KILL);
+  vStatus = vos_wait_single_event( &(gpVosContext->wdaCompleteEvent),
+                                   VOS_WDA_TIMEOUT );
+  if( vStatus != VOS_STATUS_SUCCESS )
   {
-     VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-         "%s: Failed to stop WDA", __func__);
-     VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vStatus ) );
-     WDA_stopFailed(vosContext);
-  }
-  else
-  {
-    vStatus = vos_wait_single_event( &(gpVosContext->wdaCompleteEvent),
-                                     VOS_WDA_TIMEOUT );
-    if( vStatus != VOS_STATUS_SUCCESS )
-    {
-       if( vStatus == VOS_STATUS_E_TIMEOUT )
-       {
-          VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-           "%s: Timeout occurred before WDA_stop complete", __func__);
-  
-       }
-       else
-       {
-          VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-           "%s: WDA_stop reporting other error", __func__);
-       }
-       VOS_ASSERT( 0 );
-       WDA_stopFailed(vosContext);
-    }
+     if( vStatus == VOS_STATUS_E_TIMEOUT )
+     {
+        VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+         "%s: Timeout occurred before WDA_stop complete", __func__);
+
+     }
+     else
+     {
+        VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+         "%s: WDA_stop reporting other error", __func__);
+     }
+     VOS_ASSERT( 0 );
   }
 #endif
 
@@ -960,28 +946,25 @@ VOS_STATUS vos_stop( v_CONTEXT_t vosContext )
      VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
          "%s: Failed to stop WDA", __func__);
      VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
-     WDA_stopFailed(vosContext);
-
   }
-  else {
-     vosStatus = vos_wait_single_event( &(gpVosContext->wdaCompleteEvent),
+
+  vosStatus = vos_wait_single_event( &(gpVosContext->wdaCompleteEvent),
                                      VOS_WDA_STOP_TIMEOUT );
    
-     if ( vosStatus != VOS_STATUS_SUCCESS )
+  if ( vosStatus != VOS_STATUS_SUCCESS )
+  {
+     if ( vosStatus == VOS_STATUS_E_TIMEOUT )
      {
-        if ( vosStatus == VOS_STATUS_E_TIMEOUT )
-        {
-            VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-            "%s: Timeout occurred before WDA complete", __func__);
-        }
-        else
-        {
-            VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-            "%s: WDA_stop reporting other error", __func__ );
-        }
-        WDA_stopFailed(vosContext);
+        VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+         "%s: Timeout occurred before WDA complete", __func__);
      }
- }
+     else
+     {
+        VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+         "%s: WDA_stop reporting other error", __func__ );
+     }
+     WDA_stopFailed(vosContext);
+  }
 #endif
 
   /* SYS STOP will stop SME and MAC */
@@ -1084,7 +1067,7 @@ VOS_STATUS vos_close( v_CONTEXT_t vosContext )
      vosStatus = WDA_shutdown( vosContext, VOS_TRUE );
      if (VOS_IS_STATUS_SUCCESS( vosStatus ) )
      {
-        hdd_set_ssr_required( HDD_SSR_REQUIRED );
+        hdd_set_ssr_required( VOS_TRUE );
      }
      else
      {

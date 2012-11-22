@@ -19,6 +19,8 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+/*
+ * */
 #ifndef WLAN_QCT_TLI_H
 #define WLAN_QCT_TLI_H
 
@@ -136,7 +138,7 @@ when        who    what, where, why
 #define  WLANTL_802_11_HEADER_LEN            24
 
 /*802.11 header length + QOS ctrl field*/
-#define  WLANTL_MPDU_HEADER_LEN              26
+#define  WLANTL_MPDU_HEADER_LEN              32
 
 /*802.11 header definitions*/
 #define  WLANTL_802_11_MAX_HEADER_LEN        40
@@ -582,6 +584,9 @@ typedef struct
      such algorithm. */
   v_U32_t uLwmThreshold;
 
+  //tx disable forced by Riva software
+  v_U16_t fcStaTxDisabled;
+
   /** HDD buffer status for packet scheduling. Once HDD
    *  stores a new packet in a previously empty queue, it
    *  will call TL interface to set the fields. The fields
@@ -678,6 +683,7 @@ typedef struct
    v_S7_t                             historyRSSI;
    v_U8_t                             alpha;
    v_U32_t                            sampleTime;
+   v_U32_t                            fwNotification;
 } WLANTL_CURRENT_HO_STATE_TYPE;
 
 typedef struct
@@ -826,13 +832,14 @@ typedef struct
 
     The result code associated with performing the operation
 
-    TRUE: if there are still frames to fetch
-    FALSE: error or HDD queues are drained
+    1 or more: number of required resources if there are still frames to fetch
+               For Volans, it's BD/PDU numbers. For Prima, it's free DXE descriptors.
+    0 : error or HDD queues are drained
 
   SIDE EFFECTS
 
 ============================================================================*/
-v_BOOL_t
+v_U32_t
 WLANTL_GetFrames
 (
   v_PVOID_t       pAdapter,

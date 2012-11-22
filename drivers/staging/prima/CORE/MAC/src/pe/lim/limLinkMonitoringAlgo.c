@@ -172,11 +172,19 @@ limDeleteStaContext(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
             case HAL_DEL_STA_REASON_CODE_KEEP_ALIVE:
             case HAL_DEL_STA_REASON_CODE_TIM_BASED:
                 PELOGE(limLog(pMac, LOGE, FL(" Deleting station: staId = %d, reasonCode = %d\n"), pMsg->staId, pMsg->reasonCode);)
-#endif        
-                pStaDs = dphGetHashEntry(pMac, pMsg->assocId, &psessionEntry->dph.dphHashTable);
+#endif
+                if((eLIM_BT_AMP_AP_ROLE == psessionEntry->limSystemRole) ||
+                   (eLIM_AP_ROLE == psessionEntry->limSystemRole))
+                {
+                    pStaDs = dphGetHashEntry(pMac, pMsg->assocId, &psessionEntry->dph.dphHashTable);
+                }
+                else
+                {
+                    pStaDs = dphGetHashEntry(pMac, DPH_STA_HASH_INDEX_PEER, &psessionEntry->dph.dphHashTable);
+                }
                 if (! pStaDs)
                 {
-                   PELOGW(limLog(pMac, LOGW, FL("Skip STA deletion (invalid STA)\n"));)
+                   PELOGE(limLog(pMac, LOGE, FL("Skip STA deletion (invalid STA) limSystemRole=%d\n"),psessionEntry->limSystemRole);)
                    palFreeMemory(pMac->hHdd, pMsg);
                    return;
                 }
@@ -186,31 +194,31 @@ limDeleteStaContext(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
                 */
                 if (pStaDs->staIndex != pMsg->staId)
                 {
-                    PELOGW(limLog(pMac, LOGW, FL("staid mismatch: %d vs %d \n"), pStaDs->staIndex, pMsg->staId);)
+                    PELOGE(limLog(pMac, LOGE, FL("staid mismatch: %d vs %d \n"), pStaDs->staIndex, pMsg->staId);)
                     palFreeMemory(pMac->hHdd, pMsg);
                     return;
                 }
 
-                if((eLIM_BT_AMP_AP_ROLE == psessionEntry->limSystemRole) 
-					            || (eLIM_AP_ROLE == psessionEntry->limSystemRole))
-       	        {
+                if((eLIM_BT_AMP_AP_ROLE == psessionEntry->limSystemRole) ||
+                   (eLIM_AP_ROLE == psessionEntry->limSystemRole))
+                {
                     PELOG1(limLog(pMac, LOG1, FL("SAP:lim Delete Station Context (staId: %d, assocId: %d) \n"),
-                                                               pMsg->staId, pMsg->assocId);)
+                                  pMsg->staId, pMsg->assocId);)
                     limTriggerSTAdeletion(pMac, pStaDs, psessionEntry);
                 }
                 else
                 {
                     //TearDownLink with AP
                     tLimMlmDeauthInd  mlmDeauthInd;
-                    PELOG1(limLog(pMac, LOG1, FL("lim Delete Station Context (staId: %d, assocId: %d) \n"),
-                                                               pMsg->staId, pMsg->assocId);)
+                    PELOGW(limLog(pMac, LOGW, FL("lim Delete Station Context (staId: %d, assocId: %d) \n"),
+                                  pMsg->staId, pMsg->assocId);)
 
                     pStaDs->mlmStaContext.disassocReason = eSIR_MAC_UNSPEC_FAILURE_REASON;
                     pStaDs->mlmStaContext.cleanupTrigger = eLIM_LINK_MONITORING_DEAUTH;
 
-                    /// Issue Deauth Indication to SME.
+                    // Issue Deauth Indication to SME.
                     palCopyMemory( pMac->hHdd, (tANI_U8 *) &mlmDeauthInd.peerMacAddr,
-                                     pStaDs->staAddr, sizeof(tSirMacAddr));
+                                   pStaDs->staAddr, sizeof(tSirMacAddr));
                     mlmDeauthInd.reasonCode    = (tANI_U8) pStaDs->mlmStaContext.disassocReason;
                     mlmDeauthInd.deauthTrigger =  pStaDs->mlmStaContext.cleanupTrigger;
 
@@ -328,8 +336,10 @@ limTriggerSTAdeletion(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession pse
     pBuf += sizeof(tANI_U16);
     msgLength += sizeof(tANI_U16);
 
-    //send disassoc OTA
-    pBuf[0]= 1;
+    //Do not send disassoc OTA
+    //pBuf[0] = 1 means do not send the disassoc frame over the air
+    //pBuf[0] = 0 means send the disassoc frame over the air
+    pBuf[0]= 0;
     pBuf += sizeof(tANI_U8);
     msgLength += sizeof(tANI_U8);
 
@@ -373,14 +383,14 @@ limTriggerSTAdeletion(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession pse
  */
 
 void
-limTearDownLinkWithAp(tpAniSirGlobal pMac)
+limTearDownLinkWithAp(tpAniSirGlobal pMac, tANI_U8 sessionId, tSirMacReasonCodes reasonCode)
 {
     tpDphHashNode pStaDs = NULL;
 
     //tear down the following sessionEntry
     tpPESession psessionEntry;
 
-    if((psessionEntry = peFindSessionBySessionId(pMac, pMac->lim.limTimers.gLimProbeAfterHBTimer.sessionId))== NULL)
+    if((psessionEntry = peFindSessionBySessionId(pMac, sessionId))== NULL)
     {
         limLog(pMac, LOGP,FL("Session Does not exist for given sessionID\n"));
         return;
@@ -408,7 +418,7 @@ limTearDownLinkWithAp(tpAniSirGlobal pMac)
     {
         tLimMlmDeauthInd  mlmDeauthInd;
 
-        pStaDs->mlmStaContext.disassocReason = eSIR_MAC_UNSPEC_FAILURE_REASON;
+        pStaDs->mlmStaContext.disassocReason = reasonCode;
         pStaDs->mlmStaContext.cleanupTrigger = eLIM_LINK_MONITORING_DEAUTH;
 
         /// Issue Deauth Indication to SME.
@@ -468,6 +478,8 @@ void limHandleHeartBeatFailure(tpAniSirGlobal pMac,tpPESession psessionEntry)
     WLAN_VOS_DIAG_LOG_REPORT(log_ptr);
 #endif //FEATURE_WLAN_DIAG_SUPPORT
 
+    /* Ensure HB Status for the session has been reseted */
+    psessionEntry->LimHBFailureStatus = eANI_BOOLEAN_FALSE;
     /** Re Activate Timer if the system is Waiting for ReAssoc Response*/
     if(((psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE) || 
         (psessionEntry->limSystemRole == eLIM_STA_ROLE) ||
@@ -506,25 +518,29 @@ void limHandleHeartBeatFailure(tpAniSirGlobal pMac,tpPESession psessionEntry)
         pMac->lim.gLimHBfailureCntInLinkEstState++;
 
         /**
-         * Send Probe Request frame to AP to see if
-         * it is still around. Wait until certain
-         * timeout for Probe Response from AP.
+         * Check if connected on the DFS channel, if not connected on
+         * DFS channel then only send the probe request otherwise tear down the link
          */
-        PELOGW(limLog(pMac, LOGW, FL("Heart Beat missed from AP. Sending Probe Req\n"));)
-        /* for searching AP, we don't include any additional IE */
-        limSendProbeReqMgmtFrame(pMac, &psessionEntry->ssId, psessionEntry->bssId,
-                                  psessionEntry->currentOperChannel,psessionEntry->selfMacAddr,
-                                  psessionEntry->dot11mode, 0, NULL);
-
-        //assign the sessionId to the timer object
-
-        limDeactivateAndChangeTimer(pMac, eLIM_PROBE_AFTER_HB_TIMER);
-        MTRACE(macTrace(pMac, TRACE_CODE_TIMER_ACTIVATE, 0, eLIM_PROBE_AFTER_HB_TIMER));
-        pMac->lim.limTimers.gLimProbeAfterHBTimer.sessionId = psessionEntry->peSessionId;
-        if (tx_timer_activate(&pMac->lim.limTimers.gLimProbeAfterHBTimer) != TX_SUCCESS)
+        if(!limIsconnectedOnDFSChannel(psessionEntry->currentOperChannel))
         {
-            limLog(pMac, LOGP, FL("Fail to re-activate Probe-after-heartbeat timer\n"));
-            limReactivateHeartBeatTimer(pMac, psessionEntry);
+            /*** Detected continuous Beacon Misses ***/
+             psessionEntry->LimHBFailureStatus= eANI_BOOLEAN_TRUE;
+            /**
+             * Send Probe Request frame to AP to see if
+             * it is still around. Wait until certain
+             * timeout for Probe Response from AP.
+             */
+            PELOGW(limLog(pMac, LOGW, FL("Heart Beat missed from AP. Sending Probe Req\n"));)
+            /* for searching AP, we don't include any additional IE */
+            limSendProbeReqMgmtFrame(pMac, &psessionEntry->ssId, psessionEntry->bssId,
+                                      psessionEntry->currentOperChannel,psessionEntry->selfMacAddr,
+                                      psessionEntry->dot11mode, 0, NULL);
+        }
+        else
+        {
+            /* Connected on DFS channel so should not send the probe request
+            * tear down the link directly */
+            limTearDownLinkWithAp(pMac, psessionEntry->peSessionId, eSIR_MAC_UNSPEC_FAILURE_REASON);
         }
     }
     else

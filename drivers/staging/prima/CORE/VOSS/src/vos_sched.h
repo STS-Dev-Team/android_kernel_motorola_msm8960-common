@@ -275,6 +275,8 @@ typedef struct _VosWatchdogContext
 
    v_BOOL_t resetInProgress;
 
+   vos_chip_reset_reason_type reason;
+
    /* Lock for preventing multiple reset being triggered simultaneously */
    spinlock_t wdLock;
 
@@ -523,6 +525,7 @@ void vos_sched_flush_tx_mqs  (pVosSchedContext pSchedContext);
 void vos_sched_flush_rx_mqs  (pVosSchedContext pSchedContext);
 #endif
 VOS_STATUS vos_watchdog_chip_reset ( vos_chip_reset_reason_type reason );
+void clearWlanResetReason(void);
 
 void vos_timer_module_init( void );
 VOS_STATUS vos_watchdog_wlan_shutdown(void);
