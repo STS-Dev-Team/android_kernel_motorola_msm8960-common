@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -88,9 +88,6 @@ void limSendSmeGetNoiseRsp(tpAniSirGlobal pMac, tSirMacNoise noise);
 void limSendSmeIBSSPeerInd(tpAniSirGlobal pMac,tSirMacAddr peerMacAddr,tANI_U16 staIndex,tANI_U8 ucastIdx,tANI_U8 bcastIdx,tANI_U8 *beacon,tANI_U16 beaconLen, tANI_U16 msgType);
 void limSendExitBmpsInd(tpAniSirGlobal pMac, tExitBmpsReason reasonCode);
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-void limSendSmeOemDataRsp(tpAniSirGlobal pMac, tANI_U32* pMsgBuf, tSirResultCodes resultCode);
-#endif
 
 void limSendSmePreChannelSwitchInd(tpAniSirGlobal pMac);
 void limSendSmePostChannelSwitchInd(tpAniSirGlobal pMac);

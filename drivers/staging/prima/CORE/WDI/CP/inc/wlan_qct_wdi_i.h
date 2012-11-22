@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -84,6 +84,11 @@ when        who    what, where, why
 #define WDI_ERR_INVALID_RSP_FMT            2 
 #define WDI_ERR_RSP_TIMEOUT                3 
 #define WDI_ERR_DEV_INTERNAL_FAILURE       4
+
+/*WDI Response timeout - how long will WDI wait for a response from the device     
+    - it should be large enough to allow any other failure mechanism to kick 
+      in before we get to a timeout (ms units)*/
+#define WDI_RESPONSE_TIMEOUT   10000
 
 /*In prima 12 HW stations are supported including BCAST STA(staId 0)
  and SELF STA(staId 1) so total ASSOC stations which can connect to Prima
@@ -363,8 +368,8 @@ typedef enum
   /* WLAN FTM Command request */
   WDI_FTM_CMD_REQ            = 59,
 
-  /*WLAN START OEM_DATA MEAS Request*/
-  WDI_START_OEM_DATA_REQ   = 60,
+  /*WLAN START INNAV MEAS Request*/
+  WDI_START_INNAV_MEAS_REQ   = 60,
   /* WLAN host resume request */
   WDI_HOST_RESUME_REQ      = 61,
   
@@ -594,8 +599,8 @@ typedef enum
   /*Delete Self STA Response*/
   WDI_DEL_STA_SELF_RESP       = 57,
 
-  /*WLAN START OEM_DATA Response*/
-  WDI_START_OEM_DATA_RESP   = 58,
+  /*WLAN START INNAV MEAS Response*/
+  WDI_START_INNAV_MEAS_RESP   = 58,
 
   /* WLAN host resume request */
   WDI_HOST_RESUME_RESP        = 59,
@@ -1129,6 +1134,7 @@ typedef struct
  @see
  @return pointer to the context 
 */
+//fixbuild WPT_INLINE void* WDI_GET_PAL_CTX( void );
 void* WDI_GET_PAL_CTX( void );
 
 /*---------------------------------------------------------------------------
@@ -2396,24 +2402,6 @@ WDI_ProcessFlushAcReq
   WDI_EventInfoType*     pEventData
 );
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/**
- @brief Process Start Oem Data Request function (called when Main 
-        FSM allows it)
- 
- @param  pWDICtx:         pointer to the WLAN DAL context 
-         pEventData:      pointer to the event information structure 
-  
- @see
- @return Result of the function call
-*/
-WDI_Status
-WDI_ProcessStartOemDataReq
-( 
-  WDI_ControlBlockType*  pWDICtx,
-  WDI_EventInfoType*     pEventData
-);
-#endif
 
 /**
  @brief Process Host Resume Request function (called when Main 
@@ -3582,24 +3570,6 @@ WDI_ProcessDelSTASelfRsp
   WDI_EventInfoType*     pEventData
 );
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/**
- @brief Start Oem Data Rsp function (called when a 
-        response is being received over the bus from HAL)
- 
- @param  pWDICtx:         pointer to the WLAN DAL context 
-         pEventData:      pointer to the event information structure 
-  
- @see
- @return Result of the function call
-*/
-WDI_Status
-WDI_ProcessStartOemDataRsp
-( 
-  WDI_ControlBlockType*  pWDICtx,
-  WDI_EventInfoType*     pEventData
-);
-#endif
 
  /**
  @brief WDI_ProcessHostResumeRsp function (called when a 

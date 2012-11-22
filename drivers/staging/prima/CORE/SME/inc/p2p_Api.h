@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -80,7 +80,7 @@ eHalStatus sme_updateP2pIe( tHalHandle hHal, void *p2pIe,
                             tANI_U32 p2pIeLength );
 eHalStatus sme_sendAction( tHalHandle hHal, tANI_U8 sessionId,
                            const tANI_U8 *pBuf, tANI_U32 len,
-                           tANI_U16 wait, tANI_BOOLEAN noack);
+                           tANI_U16 wait);
 eHalStatus sme_CancelRemainOnChannel( tHalHandle hHal, tANI_U8 sessionId );
 eHalStatus sme_p2pOpen( tHalHandle hHal );
 eHalStatus sme_p2pClose( tHalHandle hHal );
@@ -90,7 +90,7 @@ eHalStatus p2pRemainOnChannel( tHalHandle hHal, tANI_U8 sessionId,
                                remainOnChanCallback callback, void *pContext );
 eHalStatus p2pSendAction( tHalHandle hHal, tANI_U8 sessionId,
                           const tANI_U8 *pBuf, tANI_U32 len,
-                          tANI_U16 wait, tANI_BOOLEAN noack);
+                          tANI_U16 wait);
 eHalStatus p2pCancelRemainOnChannel( tHalHandle hHal, tANI_U8 sessionId );
 eHalStatus p2pSetPs( tHalHandle hHal, tP2pPsConfig *pNoA );
 #endif //__P2P_API_H__

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -89,10 +89,9 @@
 /*===========================================================================
    WLAN DAL Control Path Internal Data Definitions and Declarations 
  ===========================================================================*/
+#define WDI_SET_POWER_STATE_TIMEOUT  10000 /* in msec a very high upper limit */
 #define WDI_WCTS_ACTION_TIMEOUT       2000 /* in msec a very high upper limit */
 
-#define MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
-#define MAC_ADDRESS_STR "%02x:%02x:%02x:%02x:%02x:%02x"
 
 #ifdef FEATURE_WLAN_SCAN_PNO
 #define WDI_PNO_VERSION_MASK 0x8000
@@ -242,11 +241,7 @@ WDI_ReqProcFuncType  pfnReqProcTbl[WDI_MAX_UMAC_IND] =
   NULL,
 #endif /* ANI_MANF_DIAG */
   
-#ifdef FEATURE_OEM_DATA_SUPPORT
-  WDI_ProcessStartOemDataReq,     /*WDI_START_OEM_DATA_REQ*/
-#else
   NULL,
-#endif /*FEATURE_OEM_DATA_SUPPORT*/
   WDI_ProcessHostResumeReq,            /*WDI_HOST_RESUME_REQ*/
   
   WDI_ProcessKeepAliveReq,       /* WDI_KEEP_ALIVE_REQ */    
@@ -382,11 +377,7 @@ WDI_RspProcFuncType  pfnRspProcTbl[WDI_MAX_RESP] =
 #endif /* WLAN_FEATURE_VOWIFI_11R */
   WDI_ProcessAddSTASelfRsp,          /* WDI_ADD_STA_SELF_RESP */
   WDI_ProcessDelSTASelfRsp,          /* WDI_DEL_STA_SELF_RESP */
-#ifdef FEATURE_OEM_DATA_SUPPORT
-  WDI_ProcessStartOemDataRsp,     /*WDI_START_OEM_DATA_RESP*/
-#else
   NULL,
-#endif /*FEATURE_OEM_DATA_SUPPORT*/
   WDI_ProcessHostResumeRsp,        /*WDI_HOST_RESUME_RESP*/
 
 #ifdef WLAN_FEATURE_P2P
@@ -742,7 +733,7 @@ static char *WDI_getReqMsgString(wpt_uint16 wdiReqMsgId)
     CASE_RETURN_STRING( WDI_ADD_STA_SELF_REQ );
     CASE_RETURN_STRING( WDI_DEL_STA_SELF_REQ );
     CASE_RETURN_STRING( WDI_FTM_CMD_REQ );
-    CASE_RETURN_STRING( WDI_START_OEM_DATA_REQ );
+    CASE_RETURN_STRING( WDI_START_INNAV_MEAS_REQ );
     CASE_RETURN_STRING( WDI_HOST_RESUME_REQ );
     CASE_RETURN_STRING( WDI_KEEP_ALIVE_REQ);
   #ifdef FEATURE_WLAN_SCAN_PNO
@@ -838,7 +829,7 @@ static char *WDI_getRespMsgString(wpt_uint16 wdiRespMsgId)
     CASE_RETURN_STRING( WDI_ADD_STA_SELF_RESP );
     CASE_RETURN_STRING( WDI_DEL_STA_SELF_RESP );
     CASE_RETURN_STRING( WDI_FTM_CMD_RESP );
-    CASE_RETURN_STRING( WDI_START_OEM_DATA_RESP );
+    CASE_RETURN_STRING( WDI_START_INNAV_MEAS_RESP );
     CASE_RETURN_STRING( WDI_HOST_RESUME_RESP );
     CASE_RETURN_STRING( WDI_KEEP_ALIVE_RESP);
   #ifdef FEATURE_WLAN_SCAN_PNO
@@ -1304,7 +1295,6 @@ WDI_Stop
 )
 {
   WDI_EventInfoType      wdiEventData;
-  WDI_ControlBlockType*  pWDICtx = &gWDICb;
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
   /*------------------------------------------------------------------------
@@ -1317,15 +1307,6 @@ WDI_Stop
 
     return WDI_STATUS_E_NOT_ALLOWED; 
   }
-
-  /*Access to the global state must be locked before cleaning */
-  wpalMutexAcquire(&pWDICtx->wptMutex);
-
-  /*Clear all pending request*/
-  WDI_ClearPendingRequests(pWDICtx);
-
-  /*We have completed cleaning unlock now*/
-  wpalMutexRelease(&pWDICtx->wptMutex);
 
   /*------------------------------------------------------------------------
     Fill in Event data and post to the Main FSM
@@ -4182,67 +4163,6 @@ WDI_BtAmpEventReq
 
 }/*WDI_BtAmpEventReq*/
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/**
- @brief WDI_Start Oem Data Req will be called when the upper MAC 
-        wants to notify the lower mac on a oem data Req event.Upon
-        the call of this API the WLAN DAL will pack and send a
-        HAL OEM Data Req event request message to the lower RIVA
-        sub-system if DAL is in state STARTED.
-
-        In state BUSY this request will be queued. Request won't
-        be allowed in any other state. 
-
-  
- @param pwdiOemDataReqParams: the Oem Data Req as 
-                      specified by the Device Interface
-  
-        wdiStartOemDataRspCb: callback for passing back the
-        response of the Oem Data Req received from the
-        device
-  
-        pUserData: user data will be passed back with the
-        callback 
- 
- @return Result of the function call
-*/
-WDI_Status 
-WDI_StartOemDataReq
-(
-  WDI_oemDataReqParamsType*         pwdiOemDataReqParams,
-  WDI_oemDataRspCb                  wdiOemDataRspCb,
-  void*                             pUserData
-)
-{
-   WDI_EventInfoType      wdiEventData;
-   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-   /*------------------------------------------------------------------------
-     Sanity Check 
-   ------------------------------------------------------------------------*/
-   if ( eWLAN_PAL_FALSE == gWDIInitialized )
-   {
-     WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
-               "WDI API call before module is initialized - Fail request");
-
-     return WDI_STATUS_E_NOT_ALLOWED; 
-   }
-
-   /*------------------------------------------------------------------------
-     Fill in Event data and post to the Main FSM
-   ------------------------------------------------------------------------*/
-   wdiEventData.wdiRequest      = WDI_START_OEM_DATA_REQ;
-   wdiEventData.pEventData      = pwdiOemDataReqParams; 
-   wdiEventData.uEventDataSize  = sizeof(*pwdiOemDataReqParams); 
-   wdiEventData.pCBfnc          = wdiOemDataRspCb; 
-   wdiEventData.pUserData       = pUserData;
-
-   return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdiEventData);
-
-
-}
-
-#endif
 
 
 /*======================================================================== 
@@ -6243,7 +6163,7 @@ WDI_ProcessStopReq
   wpt_uint8*             pSendBuffer         = NULL; 
   wpt_uint16             usDataOffset        = 0;
   wpt_uint16             usSendSize          = 0;
-  wpt_status             status;
+
   tHalMacStopReqMsg      halStopReq; 
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
@@ -6296,8 +6216,7 @@ WDI_ProcessStopReq
      WDI_STATableStop(pWDICtx);
 
      /* Reset the event to be not signalled */
-     status = wpalEventReset(&pWDICtx->setPowerStateEvent);
-     if (eWLAN_PAL_STATUS_SUCCESS != status)
+     if(WDI_STATUS_SUCCESS != wpalEventReset(&pWDICtx->setPowerStateEvent) )
      {
         WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                   "WDI Init failed to reset power state event");
@@ -6310,9 +6229,8 @@ WDI_ProcessStopReq
      /*
       * Wait for the event to be set once the ACK comes back from DXE 
       */
-     status = wpalEventWait(&pWDICtx->setPowerStateEvent, 
-                            WDI_SET_POWER_STATE_TIMEOUT);
-     if (eWLAN_PAL_STATUS_SUCCESS != status)
+     if(WDI_STATUS_SUCCESS != wpalEventWait(&pWDICtx->setPowerStateEvent, 
+                                            WDI_SET_POWER_STATE_TIMEOUT))
      {
         WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                   "WDI Init failed to wait on an event");
@@ -6942,8 +6860,6 @@ WDI_ProcessBSSSessionJoinReq
   tHalJoinReqMsg          halJoinReqMsg; 
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
-  wpalMutexAcquire(&pWDICtx->wptMutex);
-
   /*------------------------------------------------------------------------
     Check to see if we have any session with this BSSID already stored, we
     should not
@@ -6955,20 +6871,12 @@ WDI_ProcessBSSSessionJoinReq
   if ( NULL != pBSSSes )
   {
     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
-          "Association for this BSSID: " MAC_ADDRESS_STR " is already in place",
-          MAC_ADDR_ARRAY(pwdiJoinParams->wdiReqInfo.macBSSID));
-
-    /*reset the bAssociationInProgress otherwise the next 
-     *join request will be queued*/
-    pWDICtx->bAssociationInProgress = eWLAN_PAL_FALSE;
-    wpalMutexRelease(&pWDICtx->wptMutex);
-
-    /* Reload the driver if we hit this error condition */
-    wpalWlanReload();
+              "Association for this BSSID is already in place");
 
     return WDI_STATUS_E_NOT_ALLOWED; 
   }
 
+  wpalMutexAcquire(&pWDICtx->wptMutex);
   /*------------------------------------------------------------------------
     Fetch an empty session block 
   ------------------------------------------------------------------------*/
@@ -6979,9 +6887,6 @@ WDI_ProcessBSSSessionJoinReq
     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
               "DAL has no free sessions - cannot run another join");
 
-    /*reset the bAssociationInProgress otherwise the next 
-     *join request will be queued*/
-    pWDICtx->bAssociationInProgress = eWLAN_PAL_FALSE;
     wpalMutexRelease(&pWDICtx->wptMutex);
     return WDI_STATUS_RES_FAILURE; 
   }
@@ -7365,29 +7270,26 @@ WDI_ProcessDelBSSReq
   {
     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
               "Association sequence for this BSS does not yet exist");
-    /* Allow the DEL_BSS to be processed by the HAL ,
-     * This can come if some error condition happens 
-     * during the join process 
-     * Hit this condition if WDI cleans up BSS table 
-     * as part of the set link state with WDI_LINK_IDLE_STATE*/
+
+    wpalMutexRelease(&pWDICtx->wptMutex);
+
+    return WDI_STATUS_E_NOT_ALLOWED; 
   }
-  else
+
+  /*------------------------------------------------------------------------
+    Check if this BSS is being currently processed or queued,
+    if queued - queue the new request as well 
+  ------------------------------------------------------------------------*/
+  if ( eWLAN_PAL_TRUE == pBSSSes->bAssocReqQueued )
   {
-    /*------------------------------------------------------------------------
-      Check if this BSS is being currently processed or queued,
-      if queued - queue the new request as well 
-    ------------------------------------------------------------------------*/
-    if ( eWLAN_PAL_TRUE == pBSSSes->bAssocReqQueued )
-    {
-      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
-                "Association sequence for this BSS exists but currently queued");
-  
-      wdiStatus = WDI_QueueAssocRequest( pWDICtx, pBSSSes, pEventData); 
-  
-      wpalMutexRelease(&pWDICtx->wptMutex);
-  
-      return wdiStatus; 
-    }
+    WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
+              "Association sequence for this BSS exists but currently queued");
+
+    wdiStatus = WDI_QueueAssocRequest( pWDICtx, pBSSSes, pEventData); 
+
+    wpalMutexRelease(&pWDICtx->wptMutex);
+
+    return wdiStatus; 
   }
 
   /*-----------------------------------------------------------------------
@@ -7427,7 +7329,7 @@ WDI_ProcessDelBSSReq
   /*Fill in the message request structure*/
 
   /*BSS Index is saved on config BSS response and Post Assoc Response */
-  halBssReqMsg.deleteBssParams.bssIdx = pwdiDelBSSParams->ucBssIdx; 
+  halBssReqMsg.deleteBssParams.bssIdx = pBSSSes->ucBSSIdx; 
 
   wpalMemoryCopy( pSendBuffer+usDataOffset, 
                   &halBssReqMsg.deleteBssParams, 
@@ -9618,82 +9520,6 @@ WDI_ProcessDelSTASelfReq
 
 }
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/**
- @brief Process Start Oem Data Request function (called when Main 
-        FSM allows it)
- 
- @param  pWDICtx:         pointer to the WLAN DAL context 
-         pEventData:      pointer to the event information structure 
-  
- @see
- @return Result of the function call
-*/
-WDI_Status
-WDI_ProcessStartOemDataReq
-( 
-  WDI_ControlBlockType*  pWDICtx,
-  WDI_EventInfoType*     pEventData
-)
-{
-  WDI_oemDataReqParamsType*    pwdiOemDataReqParams = NULL;
-  WDI_oemDataRspCb             wdiOemDataRspCb;
-  wpt_uint8*                   pSendBuffer         = NULL; 
-  wpt_uint16                   usDataOffset        = 0;
-  wpt_uint16                   usSendSize          = 0;
-  wpt_uint16                   reqLen;
-  tStartOemDataReqParams*      halStartOemDataReqParams;
-
-  /*-------------------------------------------------------------------------
-  Sanity check 
-  -------------------------------------------------------------------------*/
-  if (( NULL == pEventData ) || ( NULL == pEventData->pEventData ) ||
-      ( NULL == pEventData->pCBfnc ))
-  {
-      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
-                  "%s: Invalid parameters", __FUNCTION__);
-      WDI_ASSERT(0);
-      return WDI_STATUS_E_FAILURE; 
-  }
-
-  pwdiOemDataReqParams = (WDI_oemDataReqParamsType*)pEventData->pEventData;
-  wdiOemDataRspCb   = (WDI_oemDataRspCb)pEventData->pCBfnc;
-
-  /*-----------------------------------------------------------------------
-     Get message buffer
-   -----------------------------------------------------------------------*/
-
-  reqLen = sizeof(tStartOemDataReqParams);
-
-  if (( WDI_STATUS_SUCCESS != WDI_GetMessageBuffer( pWDICtx, 
-                         WDI_START_OEM_DATA_REQ, reqLen,
-                              &pSendBuffer, &usDataOffset, &usSendSize))||
-        (usSendSize < (usDataOffset + reqLen)))
-  {
-      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL,  eWLAN_PAL_TRACE_LEVEL_WARN,
-               "Unable to get send buffer in Start Oem Data req %x %x %x",
-                 pEventData, pwdiOemDataReqParams, wdiOemDataRspCb);
-      WDI_ASSERT(0);
-      return WDI_STATUS_E_FAILURE; 
-  }
-
-  //copying WDI OEM DATA REQ PARAMS to shared memory
-  halStartOemDataReqParams = (tStartOemDataReqParams *)(pSendBuffer + usDataOffset );
-
-  wpalMemoryCopy(&halStartOemDataReqParams->selfMacAddr, &pwdiOemDataReqParams->wdiOemDataReqInfo.selfMacAddr, sizeof(wpt_macAddr));
-  wpalMemoryCopy(&halStartOemDataReqParams->oemDataReq, &pwdiOemDataReqParams->wdiOemDataReqInfo.oemDataReq, OEM_DATA_REQ_SIZE);
-
-  pWDICtx->wdiReqStatusCB     = pwdiOemDataReqParams->wdiReqStatusCB;
-  pWDICtx->pReqStatusUserData = pwdiOemDataReqParams->pUserData; 
-
-  /*-------------------------------------------------------------------------
-    Send Start Request to HAL 
-  -------------------------------------------------------------------------*/
-  return  WDI_SendMsg( pWDICtx, pSendBuffer, usSendSize, 
-                        wdiOemDataRspCb, pEventData->pUserData, 
-                                            WDI_START_OEM_DATA_RESP); 
-}/*WDI_ProcessStartOemDataReq*/
-#endif
 
 /**
  @brief Process Host Resume Request function (called when Main 
@@ -9745,7 +9571,7 @@ WDI_ProcessHostResumeReq
         (usSendSize < (usDataOffset + sizeof(halResumeReqParams))))
   {
       WPAL_TRACE( eWLAN_MODULE_DAL_CTRL,  eWLAN_PAL_TRACE_LEVEL_WARN,
-               "Unable to get send buffer in Start Oem Data req %x %x %x",
+               "Unable to get send buffer in Start In Nav Meas req %x %x %x",
                  pEventData, pwdiHostResumeParams, wdiHostResumeRspCb);
       WDI_ASSERT(0);
       return WDI_STATUS_E_FAILURE; 
@@ -11328,7 +11154,6 @@ WDI_ProcessEnterImpsReq
   WDI_EventInfoType*     pEventData
 )
 {
-   wpt_status               wptStatus; 
    WDI_EnterImpsRspCb       wdiEnterImpsRspCb = NULL;
    wpt_uint8*               pSendBuffer         = NULL; 
    wpt_uint16               usDataOffset        = 0;
@@ -11364,8 +11189,7 @@ WDI_ProcessEnterImpsReq
    }
 
    /* Reset the event to be not signalled */
-   wptStatus = wpalEventReset(&pWDICtx->setPowerStateEvent);
-   if ( eWLAN_PAL_STATUS_SUCCESS != wptStatus ) 
+   if(WDI_STATUS_SUCCESS != wpalEventReset(&pWDICtx->setPowerStateEvent) )
    {
       WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                 "WDI Init failed to reset an event");
@@ -11380,9 +11204,8 @@ WDI_ProcessEnterImpsReq
    /*
     * Wait for the event to be set once the ACK comes back from DXE 
     */
-   wptStatus = wpalEventWait(&pWDICtx->setPowerStateEvent, 
-                             WDI_SET_POWER_STATE_TIMEOUT);
-   if ( eWLAN_PAL_STATUS_SUCCESS != wptStatus ) 
+   if(WDI_STATUS_SUCCESS != wpalEventWait(&pWDICtx->setPowerStateEvent, 
+                                          WDI_SET_POWER_STATE_TIMEOUT))
    {
       WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                 "WDI Init failed to wait on an event");
@@ -11479,8 +11302,6 @@ WDI_ProcessEnterBmpsReq
    wpt_uint16               usDataOffset        = 0;
    wpt_uint16               usSendSize          = 0;
    tHalEnterBmpsReqParams   enterBmpsReq;
-   wpt_status               wptStatus; 
-
    /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
   /*-------------------------------------------------------------------------
@@ -11513,8 +11334,7 @@ WDI_ProcessEnterBmpsReq
    }
 
    /* Reset the event to be not signalled */
-   wptStatus = wpalEventReset(&pWDICtx->setPowerStateEvent);
-   if ( eWLAN_PAL_STATUS_SUCCESS != wptStatus )
+   if(WDI_STATUS_SUCCESS != wpalEventReset(&pWDICtx->setPowerStateEvent) )
    {
       WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                 "WDI Init failed to reset an event");
@@ -11529,9 +11349,8 @@ WDI_ProcessEnterBmpsReq
 /*
     * Wait for the event to be set once the ACK comes back from DXE 
     */
-   wptStatus = wpalEventWait(&pWDICtx->setPowerStateEvent, 
-                             WDI_SET_POWER_STATE_TIMEOUT);
-   if ( eWLAN_PAL_STATUS_SUCCESS != wptStatus )
+   if(WDI_STATUS_SUCCESS != wpalEventWait(&pWDICtx->setPowerStateEvent, 
+                                          WDI_SET_POWER_STATE_TIMEOUT))
    {
       WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                 "WDI Init failed to wait on an event");
@@ -13980,26 +13799,29 @@ WDI_ProcessDelBSSRsp
   {
     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
               "Association sequence for this BSS does not yet exist or "
-              "association no longer in progress ");
-  }
-  else
-  {
-    /*Extract BSSID for the response to UMAC*/
-    wpalMemoryCopy(wdiDelBSSParams.macBSSID, 
-                   pBSSSes->macBSSID, WDI_MAC_ADDR_LEN);
-  
-    /*-----------------------------------------------------------------------
-      The current session will be deleted 
-    -----------------------------------------------------------------------*/
-    WDI_DeleteSession(pWDICtx, pBSSSes);
-   
-    /* Delete the BCAST STA entry from the STA table */
-    (void)WDI_STATableDelSta( pWDICtx, pBSSSes->bcastStaIdx );
-  
-    /* Delete the STA's in this BSS */
-    WDI_STATableBSSDelSta(pWDICtx, halDelBssRspMsg.deleteBssRspParams.bssIdx);
+              "association no longer in progress - mysterious HAL response");
+
+    WDI_DetectedDeviceError( pWDICtx, WDI_ERR_BASIC_OP_FAILURE); 
+    
+    wpalMutexRelease(&pWDICtx->wptMutex);
+    return WDI_STATUS_E_NOT_ALLOWED; 
   }
 
+  /*Extract BSSID for the response to UMAC*/
+  wpalMemoryCopy(wdiDelBSSParams.macBSSID, 
+                 pBSSSes->macBSSID, WDI_MAC_ADDR_LEN);
+
+  /*-----------------------------------------------------------------------
+    The current session will be deleted 
+  -----------------------------------------------------------------------*/
+  WDI_DeleteSession(pWDICtx, pBSSSes);
+ 
+  /* Delete the BCAST STA entry from the STA table */
+  (void)WDI_STATableDelSta( pWDICtx, pBSSSes->bcastStaIdx );
+
+  /* Delete the STA's in this BSS */
+  WDI_STATableBSSDelSta(pWDICtx, halDelBssRspMsg.deleteBssRspParams.bssIdx);
+  
   wpalMutexRelease(&pWDICtx->wptMutex);
 
   /*Notify UMAC*/
@@ -14815,7 +14637,7 @@ WDI_ProcessAddBASessionRsp
 
   wdiBASessionRsp.wdiStatus = WDI_HAL_2_WDI_STATUS(halBASessionRsp.status);
 
-  if ( WDI_STATUS_SUCCESS == wdiBASessionRsp.wdiStatus )
+  if ( eHAL_STATUS_SUCCESS == wdiBASessionRsp.wdiStatus )
   {
     wdiBASessionRsp.ucBaDialogToken = halBASessionRsp.baDialogToken;
     wdiBASessionRsp.ucBaTID = halBASessionRsp.baTID;
@@ -15162,77 +14984,7 @@ WDI_ProcessDelSTASelfRsp
   return WDI_STATUS_SUCCESS;
 }
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/**
- @brief Start Oem Data Rsp function (called when a 
-        response is being received over the bus from HAL)
- 
- @param  pWDICtx:         pointer to the WLAN DAL context 
-         pEventData:      pointer to the event information structure 
-  
- @see
- @return Result of the function call
-*/
-#define OFFSET_OF(structType,fldName)   (&((structType*)0)->fldName)
 
-WDI_Status
-WDI_ProcessStartOemDataRsp
-(
-  WDI_ControlBlockType*  pWDICtx,
-  WDI_EventInfoType*     pEventData
-)
-{
-  WDI_oemDataRspCb           wdiOemDataRspCb;
-  WDI_oemDataRspParamsType*  wdiOemDataRspParams;
-  tStartOemDataRspParams*    halStartOemDataRspParams;
-
-  /*-------------------------------------------------------------------------
-    Sanity check 
-  -------------------------------------------------------------------------*/
-  if (( NULL == pWDICtx ) || ( NULL == pEventData ) ||
-      ( NULL == pEventData->pEventData))
-  {
-     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
-                 "%s: Invalid parameters", __FUNCTION__);
-     WDI_ASSERT(0);
-     return WDI_STATUS_E_FAILURE; 
-  }
-
-  wdiOemDataRspCb = (WDI_oemDataRspCb)pWDICtx->pfncRspCB;
-
-   /*-------------------------------------------------------------------------
-     Extract response and send it to UMAC
-   -------------------------------------------------------------------------*/
-  halStartOemDataRspParams = (tStartOemDataRspParams *)pEventData->pEventData;
-
-
-  //It is the responsibility of the application code to check for failure
-  //conditions!
-
-  //Allocate memory for WDI OEM DATA RSP structure
-  wdiOemDataRspParams = wpalMemoryAllocate(sizeof(WDI_oemDataRspParamsType)) ;
-
-  if(NULL == wdiOemDataRspParams)
-  {
-    WPAL_TRACE( eWLAN_MODULE_DAL_CTRL,  eWLAN_PAL_TRACE_LEVEL_WARN,
-            "Failed to allocate memory in OEM DATA Response %x %x %x ",
-                pWDICtx, pEventData, pEventData->pEventData);
-    WDI_ASSERT(0);
-    return WDI_STATUS_E_FAILURE;
-  }
-
-  /* Populate WDI structure members */
-  wpalMemoryCopy(wdiOemDataRspParams->oemDataRsp, halStartOemDataRspParams->oemDataRsp, OEM_DATA_RSP_SIZE);
-
-  /*Notify UMAC*/
-  wdiOemDataRspCb(wdiOemDataRspParams, pWDICtx->pRspCBUserData);
-
-  //Free memory allocated for WDI OEM_DATA MEAS RSP structure
-  wpalMemoryFree(wdiOemDataRspParams);
-
-  return WDI_STATUS_SUCCESS;
-}/*WDI_PrcoessStartOemDataRsp*/
-#endif
 
 /*===========================================================================
            Miscellaneous Control Response Processing API 
@@ -15735,7 +15487,7 @@ WDI_ProcessAddBARsp
 
   wdiAddBARsp.wdiStatus = WDI_HAL_2_WDI_STATUS(halAddBARsp.status);
 
-  if ( WDI_STATUS_SUCCESS == wdiAddBARsp.wdiStatus )
+  if ( eHAL_STATUS_SUCCESS == wdiAddBARsp.wdiStatus )
   {
     wdiAddBARsp.ucBaDialogToken = halAddBARsp.baDialogToken;
   }
@@ -16152,18 +15904,6 @@ WDI_ProcessEnterImpsRsp
 
   wdiStatus   =   WDI_HAL_2_WDI_STATUS(halStatus); 
 
-  /* If IMPS req failed, riva is not power collapsed Put the DXE in FULL state. 
-   * Other module states are taken care by PMC.
-   * TODO: How do we take care of the case where IMPS is success, but riva power collapse fails??
-   */
-  if (wdiStatus != WDI_STATUS_SUCCESS) {
-
-	  WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
-		 "WDI PRocess Enter IMPS RSP failed With HAL Status Code: %d",halStatus);
-	  /* Call Back is not required as we are putting the DXE in FULL
-	   * and riva is already in full (IMPS RSP Failed)*/
-	  WDTS_SetPowerState(pWDICtx, WDTS_POWER_STATE_FULL, NULL);
-  }
   /*Notify UMAC*/
   wdiEnterImpsRspCb( wdiStatus, pWDICtx->pRspCBUserData);
 
@@ -16263,20 +16003,6 @@ WDI_ProcessEnterBmpsRsp
   halStatus = *((eHalStatus*)pEventData->pEventData);
   wdiStatus   =   WDI_HAL_2_WDI_STATUS(halStatus); 
 
-  /* If BMPS req failed, riva is not power collapsed put the DXE in FULL state. 
-   * Other module states are taken care by PMC.
-   * TODO: How do we take care of the case where BMPS is success, but riva power collapse fails??
-   */
-   if (wdiStatus != WDI_STATUS_SUCCESS) {	  
-
-	  WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
-		 "WDI PRocess Enter BMPS RSP failed With HAL Status Code: %d",halStatus); 
-	  /* Call Back is not required as we are putting the DXE in FULL
-	   * and riva is already in FULL (BMPS RSP Failed)*/
-	  WDTS_SetPowerState(pWDICtx, WDTS_POWER_STATE_FULL, NULL);
-	  pWDICtx->bInBmps = eWLAN_PAL_FALSE;
-   }
-  
   /*Notify UMAC*/
   wdiEnterBmpsRspCb( wdiStatus, pWDICtx->pRspCBUserData);
 
@@ -19235,7 +18961,6 @@ WDI_DequeueAssocRequest
         wpal_list_insert_front( &(pWDICtx->wptPendingQueue), &pNode); 
         wpal_list_remove_back(&(pSession->wptPendingQueue), &pNode); 
       }
-      pSession->bAssocReqQueued = eWLAN_PAL_FALSE;
   }
   else
   {
@@ -19377,10 +19102,8 @@ WDI_FindAssocSession
     ------------------------------------------------------------------------*/
   for ( i = 0; i < WDI_MAX_BSS_SESSIONS; i++ )
   {
-     if ( (pWDICtx->aBSSSessions[i].bInUse == eWLAN_PAL_TRUE) && 
-          (eWLAN_PAL_TRUE == 
-                wpalMemoryCompare(pWDICtx->aBSSSessions[i].macBSSID, macBSSID,
-                WDI_MAC_ADDR_LEN)) )
+     if ( eWLAN_PAL_TRUE == 
+          wpalMemoryCompare(pWDICtx->aBSSSessions[i].macBSSID, macBSSID, WDI_MAC_ADDR_LEN) )
      {
        /*Found the session*/
        *ppSession = &pWDICtx->aBSSSessions[i]; 
@@ -19994,10 +19717,6 @@ WDI_2_HAL_REQ_TYPE
     return WLAN_HAL_ADD_STA_SELF_REQ;
   case WDI_DEL_STA_SELF_REQ:
     return WLAN_HAL_DEL_STA_SELF_REQ;
-#ifdef FEATURE_OEM_DATA_SUPPORT
-  case WDI_START_OEM_DATA_REQ:
-    return WLAN_HAL_START_OEM_DATA_REQ;
-#endif /* FEATURE_OEM_DATA_SUPPORT */
   case WDI_HOST_RESUME_REQ:
     return WLAN_HAL_HOST_RESUME_REQ;
   case WDI_HOST_SUSPEND_IND:
@@ -20194,10 +19913,6 @@ HAL_2_WDI_RSP_TYPE
     return WDI_ADD_STA_SELF_RESP;
 case WLAN_HAL_DEL_STA_SELF_RSP:
     return WDI_DEL_STA_SELF_RESP;
-#ifdef FEATURE_OEM_DATA_SUPPORT
-  case WLAN_HAL_START_OEM_DATA_RSP:
-    return WDI_START_OEM_DATA_RESP;
-#endif /* FEATURE_OEM_DATA_SUPPORT */
   case WLAN_HAL_HOST_RESUME_RSP:
     return WDI_HOST_RESUME_RESP;
   case WLAN_HAL_KEEP_ALIVE_RSP:
@@ -20774,7 +20489,6 @@ WDI_CopyWDIConfigBSSToHALConfigBSS
   phalConfigBSS->currentExtChannel  = pwdiConfigBSS->ucCurrentExtChannel;
   phalConfigBSS->action             = pwdiConfigBSS->wdiAction;
   phalConfigBSS->htCapable          = pwdiConfigBSS->ucHTCapable;
-  phalConfigBSS->obssProtEnabled    = pwdiConfigBSS->ucObssProtEnabled;
   phalConfigBSS->rmfEnabled         = pwdiConfigBSS->ucRMFEnabled;
 
   phalConfigBSS->htOperMode = 

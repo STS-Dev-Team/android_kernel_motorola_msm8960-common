@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -80,9 +80,6 @@ typedef enum eSmeCommandType
     eSmeQosCommandMask = 0x40000,  //To identify Qos commands
     eSmeCommandAddTs,
     eSmeCommandDelTs,
-#ifdef FEATURE_OEM_DATA_SUPPORT
-    eSmeCommandOemDataReq = 0x80000, //To identify the oem data commands
-#endif
 #ifdef WLAN_FEATURE_P2P
     eSmeCommandRemainOnChannel,
     eSmeCommandNoAUpdate,

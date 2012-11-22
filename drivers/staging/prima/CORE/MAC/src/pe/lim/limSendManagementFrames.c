@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -408,7 +408,7 @@ tSirRetStatus limGetAddnIeForProbeResp(tpAniSirGlobal pMac,
         v_U8_t *ptr = addIE;
         v_U8_t elem_id, elem_len;
         if( (palAllocateMemory(pMac->hHdd, (void**)&tempbuf,
-             left)) != eHAL_STATUS_SUCCESS)
+             left)) != eSIR_SUCCESS)
         {
             PELOGE(limLog(pMac, LOGE,
                  FL("Unable to allocate memory to store addn IE"));)
@@ -660,13 +660,14 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
 
     if (addnIEPresent)
     {
-        if( (palAllocateMemory(pMac->hHdd, (void**)&addIE,
-             WNI_CFG_PROBE_RSP_ADDNIE_DATA1_LEN*3 )) != eHAL_STATUS_SUCCESS)
+        if( (palAllocateMemory(pMac->hHdd, (void**)&addIE, 
+             WNI_CFG_PROBE_RSP_ADDNIE_DATA1_LEN*3 )) != eSIR_SUCCESS)
         {
             PELOGE(limLog(pMac, LOGE,
                  FL("Unable to allocate memory to store addn IE"));)
             return;
         }
+        
         //Probe rsp IE available
         if ( eSIR_SUCCESS != wlan_cfgGetStrLen(pMac,
                                   WNI_CFG_PROBE_RSP_ADDNIE_DATA1,&addnIE1Len) )
@@ -837,7 +838,7 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
     if ( addnIEPresent )
     {
         if (palCopyMemory ( pMac->hHdd, pFrame+sizeof(tSirMacMgmtHdr)+nPayload,
-             &addIE[0], totalAddnIeLen) != eHAL_STATUS_SUCCESS)
+             &addIE[0], totalAddnIeLen) != eSIR_SUCCESS)
         {
             limLog(pMac, LOGP, FL("Additional Probe Rp IE request failed while Appending: %x"),halstatus);
             palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
@@ -853,7 +854,7 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
     if (noaLen != 0)
     {
         if (palCopyMemory ( pMac->hHdd, &pFrame[nBytes - (total_noaLen)],
-                                       &noaIe[0], total_noaLen) != eHAL_STATUS_SUCCESS)
+                                       &noaIe[0], total_noaLen) != eSIR_SUCCESS)
         {
             limLog(pMac, LOGE,
                   FL("Not able to insert NoA because of length constraint"));
@@ -1664,7 +1665,7 @@ limSendAssocRspMgmtFrame(tpAniSirGlobal pMac,
     if ( addnIEPresent )
     {
         if (palCopyMemory ( pMac->hHdd, pFrame+sizeof(tSirMacMgmtHdr)+nPayload,
-                           &addIE[0], addnIELen ) != eHAL_STATUS_SUCCESS)
+                           &addIE[0], addnIELen ) != eSIR_SUCCESS)
         {
             limLog(pMac, LOGP, FL("Additional Assoc IEs request failed while Appending: %x\n"),halstatus);
             palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
@@ -2340,7 +2341,7 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
     if (psessionEntry->pLimJoinReq->bssDescription.mdiePresent)
     {
 #if defined WLAN_FEATURE_VOWIFI_11R_DEBUG
-        limLog( pMac, LOG1, FL("mdie = %02x %02x %02x"), 
+        limLog( pMac, LOGE, FL("mdie = %02x %02x %02x\n"), 
                 (unsigned int)psessionEntry->pLimJoinReq->bssDescription.mdie[0],
                 (unsigned int)psessionEntry->pLimJoinReq->bssDescription.mdie[1],
                 (unsigned int)psessionEntry->pLimJoinReq->bssDescription.mdie[2]);
@@ -2350,7 +2351,7 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
     else 
     {
         // No 11r IEs dont send any MDIE
-        limLog( pMac, LOG1, FL("mdie not present")); 
+        limLog( pMac, LOGE, FL("mdie not present\n")); 
     }
 #endif
 
@@ -2452,7 +2453,7 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
         nPayload += nAddIELen;
     }
 
-    if( (palAllocateMemory(pMac->hHdd, (void**)&psessionEntry->assocReq, nPayload)) != eHAL_STATUS_SUCCESS)
+    if( (palAllocateMemory(pMac->hHdd, (void**)&psessionEntry->assocReq, nPayload)) != eSIR_SUCCESS)
     {
         PELOGE(limLog(pMac, LOGE, FL("Unable to allocate memory to store assoc request"));)
     }
@@ -3006,7 +3007,7 @@ limSendReassocReqMgmtFrame(tpAniSirGlobal     pMac,
         nPayload += nAddIELen;
     }
 
-    if( (palAllocateMemory(pMac->hHdd, (void**)&psessionEntry->assocReq, nPayload)) != eHAL_STATUS_SUCCESS)
+    if( (palAllocateMemory(pMac->hHdd, (void**)&psessionEntry->assocReq, nPayload)) != eSIR_SUCCESS)
     {
         PELOGE(limLog(pMac, LOGE, FL("Unable to allocate memory to store assoc request"));)
      }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -603,7 +603,7 @@ limCleanupRxPath(tpAniSirGlobal pMac, tpDphHashNode pStaDs,tpPESession psessionE
     tSirRetStatus       retCode = eSIR_SUCCESS;
 
 
-    PELOG2(limLog( pMac, LOG2, FL("**Initiate cleanup"));)
+    PELOGE(limLog( pMac, LOGE, FL("**Initiate cleanup\n"));)
 
     limAbortBackgroundScan( pMac );
 
@@ -2092,7 +2092,7 @@ limAddSta(
         pAddStaParams->uAPSD |= pAddStaParams->uAPSD << 4;
 
         pAddStaParams->maxSPLen = pStaDs->qos.capability.qosInfo.maxSpLen;
-        limLog( pMac, LOG1, FL( "uAPSD = 0x%x, maxSpLen = %d" ),
+        limLog( pMac, LOGE, FL( "uAPSD = 0x%x, maxSpLen = %d" ),
             pAddStaParams->uAPSD, pAddStaParams->maxSPLen);
     }
 #endif
@@ -2105,15 +2105,13 @@ limAddSta(
     msgQ.bodyptr = pAddStaParams;
     msgQ.bodyval = 0;
 
-    limLog( pMac, LOG1, FL( "Sending SIR_HAL_ADD_STA_REQ for assocId %d\n" ),
+    limLog( pMac, LOGE, FL( "Sending SIR_HAL_ADD_STA_REQ for assocId %d\n" ),
             pStaDs->assocId);
     MTRACE(macTraceMsgTx(pMac, 0, msgQ.type));
 
     retCode = wdaPostCtrlMsg( pMac, &msgQ );
     if( eSIR_SUCCESS != retCode)
     {
-       if (pAddStaParams->respReqd)
-          SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
         limLog( pMac, LOGE, FL("ADD_STA_REQ for aId %d failed (reason %X)\n"),
                             pStaDs->assocId, retCode );
         palFreeMemory(pMac->hHdd, (void*)pAddStaParams);
@@ -2225,14 +2223,12 @@ limDelSta(
     msgQ.bodyptr = pDelStaParams;
     msgQ.bodyval = 0;
 
-    limLog( pMac, LOG1, FL( "Sending SIR_HAL_DELETE_STA_REQ for STAID: %X and AssocID: %d" ),
+    limLog( pMac, LOGE, FL( "Sending SIR_HAL_DELETE_STA_REQ for STAID: %X and AssocID: %d\n" ),
     pDelStaParams->staIdx, pDelStaParams->assocId);
     MTRACE(macTraceMsgTx(pMac, 0, msgQ.type));
     retCode = wdaPostCtrlMsg( pMac, &msgQ );
     if( eSIR_SUCCESS != retCode)
     {
-        if(fRespReqd)
-           SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
         limLog( pMac, LOGE, FL("Posting DELETE_STA_REQ to HAL failed, reason=%X\n"),
                         retCode );
         palFreeMemory(pMac->hHdd, (void*)pDelStaParams);
@@ -2831,7 +2827,6 @@ limDelBss(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tANI_U16 bssIdx,tpPESession
 
     if( eSIR_SUCCESS != (retCode = wdaPostCtrlMsg( pMac, &msgQ )))
     {
-        SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
         limLog( pMac, LOGE, FL("Posting DELETE_BSS_REQ to HAL failed, reason=%X\n"), retCode );
         palFreeMemory(pMac->hHdd, (void*)pDelBssParams);
     }
@@ -3108,7 +3103,6 @@ tSirRetStatus limStaSendAddBss( tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
     retCode = wdaPostCtrlMsg( pMac, &msgQ );
     if( eSIR_SUCCESS != retCode) 
     {
-        SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
         palFreeMemory(pMac->hHdd, pAddBssParams);
         limLog( pMac, LOGE, FL("Posting ADD_BSS_REQ to HAL failed, reason=%X\n"),
                 retCode );
@@ -3132,16 +3126,9 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
     tpAddBssParams pAddBssParams = NULL;
     tANI_U32 retCode;
     tANI_U8 i;
-    tSchBeaconStruct *pBeaconStruct;
+    tSchBeaconStruct beaconStruct;
     tANI_U8 chanWidthSupp = 0;
     tpSirBssDescription bssDescription = &psessionEntry->pLimJoinReq->bssDescription;
-
-    if(eHAL_STATUS_SUCCESS != palAllocateMemory(pMac->hHdd, 
-                                                (void **)&pBeaconStruct, sizeof(tSchBeaconStruct)))
-    {
-        limLog(pMac, LOGE, FL("Unable to PAL allocate memory during ADD_BSS\n") );
-        return eSIR_MEM_ALLOC_FAILED;
-    }
 
 
     // Package SIR_HAL_ADD_BSS_REQ message parameters
@@ -3161,10 +3148,10 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
     limExtractApCapabilities( pMac,
                             (tANI_U8 *) bssDescription->ieFields,
                             limGetIElenFromBssDescription( bssDescription ),
-                            pBeaconStruct );
+                            &beaconStruct );
 
     if(pMac->lim.gLimProtectionControl != WNI_CFG_FORCE_POLICY_PROTECTION_DISABLE)
-        limDecideStaProtectionOnAssoc(pMac, pBeaconStruct, psessionEntry);
+        limDecideStaProtectionOnAssoc(pMac, &beaconStruct, psessionEntry);
         palCopyMemory( pMac->hHdd,  pAddBssParams->bssId,bssDescription->bssId,
                    sizeof( tSirMacAddr ));
 
@@ -3183,57 +3170,57 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
 
     pAddBssParams->beaconInterval = bssDescription->beaconInterval;
     
-    pAddBssParams->dtimPeriod = pBeaconStruct->tim.dtimPeriod;
+    pAddBssParams->dtimPeriod = beaconStruct.tim.dtimPeriod;
     pAddBssParams->updateBss = updateEntry;
 
 
-    pAddBssParams->cfParamSet.cfpCount = pBeaconStruct->cfParamSet.cfpCount;
-    pAddBssParams->cfParamSet.cfpPeriod = pBeaconStruct->cfParamSet.cfpPeriod;
-    pAddBssParams->cfParamSet.cfpMaxDuration = pBeaconStruct->cfParamSet.cfpMaxDuration;
-    pAddBssParams->cfParamSet.cfpDurRemaining = pBeaconStruct->cfParamSet.cfpDurRemaining;
+    pAddBssParams->cfParamSet.cfpCount = beaconStruct.cfParamSet.cfpCount;
+    pAddBssParams->cfParamSet.cfpPeriod = beaconStruct.cfParamSet.cfpPeriod;
+    pAddBssParams->cfParamSet.cfpMaxDuration = beaconStruct.cfParamSet.cfpMaxDuration;
+    pAddBssParams->cfParamSet.cfpDurRemaining = beaconStruct.cfParamSet.cfpDurRemaining;
 
 
-    pAddBssParams->rateSet.numRates = pBeaconStruct->supportedRates.numRates;
+    pAddBssParams->rateSet.numRates = beaconStruct.supportedRates.numRates;
     palCopyMemory( pMac->hHdd,  pAddBssParams->rateSet.rate,
-                   pBeaconStruct->supportedRates.rate, pBeaconStruct->supportedRates.numRates );
+                   beaconStruct.supportedRates.rate, beaconStruct.supportedRates.numRates );
 
     pAddBssParams->nwType = bssDescription->nwType;
     
-    pAddBssParams->shortSlotTimeSupported = (tANI_U8)pBeaconStruct->capabilityInfo.shortSlotTime; 
+    pAddBssParams->shortSlotTimeSupported = (tANI_U8)beaconStruct.capabilityInfo.shortSlotTime; 
     pAddBssParams->llaCoexist = (tANI_U8) psessionEntry->beaconParams.llaCoexist;
     pAddBssParams->llbCoexist = (tANI_U8) psessionEntry->beaconParams.llbCoexist;
     pAddBssParams->llgCoexist = (tANI_U8) psessionEntry->beaconParams.llgCoexist;
     pAddBssParams->ht20Coexist = (tANI_U8) psessionEntry->beaconParams.ht20Coexist; 
 
     // Use the advertised capabilities from the received beacon/PR
-    if (IS_DOT11_MODE_HT(psessionEntry->dot11mode) && ( pBeaconStruct->HTCaps.present ))
+    if (IS_DOT11_MODE_HT(psessionEntry->dot11mode) && ( beaconStruct.HTCaps.present ))
     {
-        pAddBssParams->htCapable = pBeaconStruct->HTCaps.present;
+        pAddBssParams->htCapable = beaconStruct.HTCaps.present;
 
-        if ( pBeaconStruct->HTInfo.present )
+        if ( beaconStruct.HTInfo.present )
         {
-            pAddBssParams->htOperMode = (tSirMacHTOperatingMode)pBeaconStruct->HTInfo.opMode;
-            pAddBssParams->dualCTSProtection = ( tANI_U8 ) pBeaconStruct->HTInfo.dualCTSProtection;
+            pAddBssParams->htOperMode = (tSirMacHTOperatingMode)beaconStruct.HTInfo.opMode;
+            pAddBssParams->dualCTSProtection = ( tANI_U8 ) beaconStruct.HTInfo.dualCTSProtection;
 
 #ifdef WLAN_SOFTAP_FEATURE
             chanWidthSupp = limGetHTCapability( pMac, eHT_SUPPORTED_CHANNEL_WIDTH_SET, psessionEntry);
 #else 
             chanWidthSupp = limGetHTCapability( pMac, eHT_SUPPORTED_CHANNEL_WIDTH_SET);
 #endif
-            if( (pBeaconStruct->HTCaps.supportedChannelWidthSet) &&
+            if( (beaconStruct.HTCaps.supportedChannelWidthSet) &&
                 (chanWidthSupp) )
             {
-                pAddBssParams->txChannelWidthSet = ( tANI_U8 ) pBeaconStruct->HTInfo.recommendedTxWidthSet;
-                pAddBssParams->currentExtChannel = pBeaconStruct->HTInfo.secondaryChannelOffset;
+                pAddBssParams->txChannelWidthSet = ( tANI_U8 ) beaconStruct.HTInfo.recommendedTxWidthSet;
+                pAddBssParams->currentExtChannel = beaconStruct.HTInfo.secondaryChannelOffset;
             }
             else
             {
                 pAddBssParams->txChannelWidthSet = WNI_CFG_CHANNEL_BONDING_MODE_DISABLE;
                 pAddBssParams->currentExtChannel = eHT_SECONDARY_CHANNEL_OFFSET_NONE;
             }
-            pAddBssParams->llnNonGFCoexist = (tANI_U8)pBeaconStruct->HTInfo.nonGFDevicesPresent;
-            pAddBssParams->fLsigTXOPProtectionFullSupport = (tANI_U8)pBeaconStruct->HTInfo.lsigTXOPProtectionFullSupport;
-            pAddBssParams->fRIFSMode = pBeaconStruct->HTInfo.rifsMode;
+            pAddBssParams->llnNonGFCoexist = (tANI_U8)beaconStruct.HTInfo.nonGFDevicesPresent;
+            pAddBssParams->fLsigTXOPProtectionFullSupport = (tANI_U8)beaconStruct.HTInfo.lsigTXOPProtectionFullSupport;
+            pAddBssParams->fRIFSMode = beaconStruct.HTInfo.rifsMode;
         }
     }
 
@@ -3252,46 +3239,47 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
         pAddBssParams->staContext.assocId = 0; // Is SMAC OK with this?
         pAddBssParams->staContext.uAPSD = 0;
         pAddBssParams->staContext.maxSPLen = 0;
-        pAddBssParams->staContext.shortPreambleSupported = (tANI_U8)pBeaconStruct->capabilityInfo.shortPreamble;
+        pAddBssParams->staContext.shortPreambleSupported = (tANI_U8)beaconStruct.capabilityInfo.shortPreamble;
         pAddBssParams->staContext.updateSta = updateEntry;
 
-        if (IS_DOT11_MODE_HT(psessionEntry->dot11mode) && ( pBeaconStruct->HTCaps.present ))
+        if (IS_DOT11_MODE_HT(psessionEntry->dot11mode) && ( beaconStruct.HTCaps.present ))
         {
             pAddBssParams->staContext.us32MaxAmpduDuration = 0;
             pAddBssParams->staContext.htCapable = 1;
-            pAddBssParams->staContext.greenFieldCapable  = ( tANI_U8 ) pBeaconStruct->HTCaps.greenField;
-            pAddBssParams->staContext.lsigTxopProtection = ( tANI_U8 ) pBeaconStruct->HTCaps.lsigTXOPProtection;
-            if( (pBeaconStruct->HTCaps.supportedChannelWidthSet) &&
+            pAddBssParams->staContext.greenFieldCapable  = ( tANI_U8 ) beaconStruct.HTCaps.greenField;
+            pAddBssParams->staContext.lsigTxopProtection = ( tANI_U8 ) beaconStruct.HTCaps.lsigTXOPProtection;
+            if( (beaconStruct.HTCaps.supportedChannelWidthSet) &&
                 (chanWidthSupp) )
             {
-                pAddBssParams->staContext.txChannelWidthSet = ( tANI_U8 )pBeaconStruct->HTInfo.recommendedTxWidthSet;
+                pAddBssParams->staContext.txChannelWidthSet = ( tANI_U8 )beaconStruct.HTInfo.recommendedTxWidthSet;
             }
             else
             {
                 pAddBssParams->staContext.txChannelWidthSet = WNI_CFG_CHANNEL_BONDING_MODE_DISABLE;
-            }
-            pAddBssParams->staContext.mimoPS             = (tSirMacHTMIMOPowerSaveState)pBeaconStruct->HTCaps.mimoPowerSave;
-            pAddBssParams->staContext.delBASupport       = ( tANI_U8 ) pBeaconStruct->HTCaps.delayedBA;
-            pAddBssParams->staContext.maxAmsduSize       = ( tANI_U8 ) pBeaconStruct->HTCaps.maximalAMSDUsize;
-            pAddBssParams->staContext.maxAmpduDensity    =             pBeaconStruct->HTCaps.mpduDensity;
-            pAddBssParams->staContext.fDsssCckMode40Mhz = (tANI_U8)pBeaconStruct->HTCaps.dsssCckMode40MHz;
-            pAddBssParams->staContext.fShortGI20Mhz = (tANI_U8)pBeaconStruct->HTCaps.shortGI20MHz;
-            pAddBssParams->staContext.fShortGI40Mhz = (tANI_U8)pBeaconStruct->HTCaps.shortGI40MHz;
-            pAddBssParams->staContext.maxAmpduSize= pBeaconStruct->HTCaps.maxRxAMPDUFactor;
-
-            if( pBeaconStruct->HTInfo.present )
-                pAddBssParams->staContext.rifsMode = pBeaconStruct->HTInfo.rifsMode;
+            }                                                           
+            pAddBssParams->staContext.mimoPS             = (tSirMacHTMIMOPowerSaveState)beaconStruct.HTCaps.mimoPowerSave;
+            pAddBssParams->staContext.delBASupport       = ( tANI_U8 ) beaconStruct.HTCaps.delayedBA;
+            pAddBssParams->staContext.maxAmsduSize       = ( tANI_U8 ) beaconStruct.HTCaps.maximalAMSDUsize;
+            pAddBssParams->staContext.maxAmpduDensity    =             beaconStruct.HTCaps.mpduDensity;
+            pAddBssParams->staContext.fDsssCckMode40Mhz = (tANI_U8)beaconStruct.HTCaps.dsssCckMode40MHz;
+            pAddBssParams->staContext.fShortGI20Mhz = (tANI_U8)beaconStruct.HTCaps.shortGI20MHz;
+            pAddBssParams->staContext.fShortGI40Mhz = (tANI_U8)beaconStruct.HTCaps.shortGI40MHz;
+            pAddBssParams->staContext.maxAmpduSize= beaconStruct.HTCaps.maxRxAMPDUFactor;
+            
+            if( beaconStruct.HTInfo.present )
+                pAddBssParams->staContext.rifsMode = beaconStruct.HTInfo.rifsMode;
         }
 
-        if ((psessionEntry->limWmeEnabled && pBeaconStruct->wmeEdcaPresent) ||
-                (psessionEntry->limQosEnabled && pBeaconStruct->edcaPresent))
+        if ((psessionEntry->limWmeEnabled && beaconStruct.wmeEdcaPresent) ||
+                (psessionEntry->limQosEnabled && beaconStruct.edcaPresent))
             pAddBssParams->staContext.wmmEnabled = 1;
         else 
             pAddBssParams->staContext.wmmEnabled = 0;
 
         //Update the rates
+        
         limPopulateOwnRateSet(pMac, &pAddBssParams->staContext.supportedRates, 
-                                        pBeaconStruct->HTCaps.supportedMCSSet, false,psessionEntry);
+                                                    beaconStruct.HTCaps.supportedMCSSet, false,psessionEntry);
         limFillSupportedRatesInfo(pMac, NULL, &pAddBssParams->staContext.supportedRates,psessionEntry);
 
     }
@@ -3348,7 +3336,6 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
     retCode = wdaPostCtrlMsg( pMac, &msgQ );
     if( eSIR_SUCCESS != retCode) 
     {
-        SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
         palFreeMemory(pMac->hHdd, pAddBssParams);
         limLog( pMac, LOGE, FL("Posting ADD_BSS_REQ to HAL failed, reason=%X\n"),
                 retCode );
@@ -3356,14 +3343,10 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
 
     }
     else
-    {
-        palFreeMemory(pMac->hHdd, pBeaconStruct);    
         return retCode;
-    }
 
  returnFailure:
     // Clean-up will be done by the caller...
-    palFreeMemory(pMac->hHdd, pBeaconStruct);
     return retCode;
 }
 

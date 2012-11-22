@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -317,7 +317,7 @@ void hdd_mon_tx_mgmt_pkt(hdd_adapter_t* pAdapter)
    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
       "%s: Sending action frame to SAP to TX, Len %d", __func__, skb->len);
 
-   if (VOS_STATUS_SUCCESS !=
+   if (eHAL_STATUS_SUCCESS != 
       WLANSAP_SendAction( (WLAN_HDD_GET_CTX(pAdapter))->pvosContext,
                            skb->data, skb->len, 0) )
    {
@@ -837,7 +837,7 @@ VOS_STATUS hdd_tx_complete_cbk( v_VOID_t *vosContext,
    pAdapter = hdd_get_adapter(pHddCtx,WLAN_HDD_INFRA_STATION);
    if(pAdapter == NULL)
    {
-      VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: HDD adapter context is Null", __FUNCTION__);
+      VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,"%s: HDD adapter context is Null", __FUNCTION__);
    }
    else
    {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -100,10 +100,6 @@
 #define LIM_MLM_REMOVEKEY_REQ  LIM_MLM_MSG_START + 39
 #define LIM_MLM_REMOVEKEY_CNF  LIM_MLM_MSG_START + 40
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-#define LIM_MLM_OEM_DATA_REQ            LIM_MLM_MSG_START + 41
-#define LIM_MLM_OEM_DATA_CNF            LIM_MLM_MSG_START + 42
-#endif
 
 #define LIM_HASH_ADD            0
 #define LIM_HASH_UPDATE         1
@@ -783,10 +779,6 @@ void limSetChannel(tpAniSirGlobal pMac, tANI_U32 titanHtcap, tANI_U8 channel, tP
 /// Function that completes channel scan
 void limCompleteMlmScan(tpAniSirGlobal, tSirResultCodes);
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/// Funtion that sets system into meas mode for oem data req
-void limSetOemDataReqMode(tpAniSirGlobal pMac, eHalStatus status, tANI_U32* data);
-#endif
 
 #ifdef ANI_SUPPORT_11H
 /// Function that sends Measurement Report action frame

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -596,8 +596,6 @@ typedef enum
 #define CSR_CB_CHANNEL_GAP 4
 #define CSR_CB_CENTER_CHANNEL_OFFSET    2
 #define CSR_MAX_24GHz_CHANNEL_NUMBER ( SIR_11B_CHANNEL_END )
-#define CSR_MIN_5GHz_CHANNEL_NUMBER  ( SIR_11A_CHANNEL_BEGIN )
-#define CSR_MAX_5GHz_CHANNEL_NUMBER  ( SIR_11A_CHANNEL_END )
 
 // WEP keysize (in bits)...
 typedef enum  

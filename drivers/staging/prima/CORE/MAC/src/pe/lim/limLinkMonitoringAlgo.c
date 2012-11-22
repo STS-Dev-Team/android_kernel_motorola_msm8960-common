@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -298,12 +298,12 @@ limTriggerSTAdeletion(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession pse
     pLen = pBuf;
     pBuf += sizeof(tANI_U16);
     msgLength += sizeof(tANI_U16);
-
+    
     //sessionId
-    *pBuf = psessionEntry->smeSessionId;
+    *pBuf = psessionEntry->peSessionId;
     pBuf++;
     msgLength++;
-
+  
     //transactionId
     limCopyU16((tANI_U8*)pBuf, psessionEntry->transactionId);
     pBuf += sizeof(tANI_U16);

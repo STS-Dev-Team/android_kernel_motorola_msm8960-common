@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -217,25 +217,6 @@ VOS_STATUS WLANTL_HSInit
 (
    v_PVOID_t   pAdapter
 );
-
-
-/*==========================================================================
-
-   FUNCTION    WLANTL_HSDeInit
-
-   DESCRIPTION 
-    
-   PARAMETERS 
-
-   RETURN VALUE
-
-============================================================================*/
-
-VOS_STATUS WLANTL_HSDeInit
-(
-   v_PVOID_t   pAdapter
-);
-
 
 /*==========================================================================
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -501,7 +501,7 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
               limLog( pMac, LOGE, "Regulatory max = %d, local power constraint = %d, max tx = %d", regMax, localConstraint, maxTxPower );
               limLog( pMac, LOGE, "Local power constraint change..updating mew maxTx power to HAL");
 #endif
-              if( rrmSendSetMaxTxPowerReq ( pMac, maxTxPower, psessionEntry ) == eSIR_SUCCESS )
+              if( rrmSendSetMaxTxPowerReq ( pMac, maxTxPower, psessionEntry ) == eHAL_STATUS_SUCCESS )
                  psessionEntry->maxTxPower = maxTxPower;
 
            }

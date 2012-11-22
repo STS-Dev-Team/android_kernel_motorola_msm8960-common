@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -339,7 +339,7 @@ tSirRetStatus macOpen(tHalHandle *pHalHandle, tHddHandle hHdd, tMacOpenParameter
 
     {
         /* Call various PE (and other layer init here) */
-        if( eSIR_SUCCESS != logInit(pMac))
+        if( eHAL_STATUS_SUCCESS != logInit(pMac))
            return eSIR_FAILURE;
             
         /* Call routine to initialize CFG data structures */

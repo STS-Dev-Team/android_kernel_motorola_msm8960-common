@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -336,7 +336,7 @@ static void Log_getCfg(tpAniSirGlobal pMac, tANI_U16 cfgId)
         tANI_U32  val;
 
         // Get integer parameter
-        if (wlan_cfgGetInt(pMac, (tANI_U16)cfgId, &val) != eSIR_SUCCESS)
+        if (wlan_cfgGetInt(pMac, (tANI_U16)cfgId, &val) != eHAL_STATUS_SUCCESS)
         {
             sysLog(pMac, LOGE, FL("Get cfgId 0x%x failed\n"), cfgId);
         }
@@ -359,7 +359,7 @@ static void Log_getCfg(tpAniSirGlobal pMac, tANI_U16 cfgId)
         else
         {
             sysLog( pMac, LOGE, FL("WNI_CFG_%s(%d  0x%x) len=%ld\n"),  gCfgParamName[cfgId], cfgId, cfgId, valueLen );
-            sirDumpBuf(pMac, SIR_WDA_MODULE_ID, LOG1, buf, valueLen) ;
+            sirDumpBuf(pMac, SIR_WDA_MODULE_ID, LOGW, buf, valueLen) ;
         }
     }
 
@@ -371,7 +371,7 @@ static void Log_setCfg(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 val)
     sysLog(pMac, LOGE, FL("Set %s(0x%x) to value 0x%x\n"),
            gCfgParamName[cfgId], cfgId, val);
 
-    if (cfgSetInt(pMac, (tANI_U16)cfgId, val) != eSIR_SUCCESS)
+    if (cfgSetInt(pMac, (tANI_U16)cfgId, val) != eHAL_STATUS_SUCCESS)
         sysLog(pMac, LOGE, FL("setting cfgId 0x%x to value 0x%x failed \n"),
                cfgId, val);
      return;

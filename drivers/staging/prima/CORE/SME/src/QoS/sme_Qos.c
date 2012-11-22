@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5656,7 +5656,7 @@ static eHalStatus sme_QosDeleteExistingFlows(tpAniSirGlobal pMac,
    pEntry = csrLLPeekHead( &sme_QosCb.flow_list, VOS_TRUE );
    if(!pEntry)
    {
-      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_WARN,
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
                 "%s: %d: Flow List empty, nothing to delete",
                 __FUNCTION__, __LINE__);
       return eHAL_STATUS_FAILURE;
@@ -5876,7 +5876,7 @@ static eHalStatus sme_QosDeleteBufferedRequests(tpAniSirGlobal pMac,
    pEntry = csrLLPeekHead( &pSession->bufferedCommandList, VOS_TRUE );
    if(!pEntry)
    {
-      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_WARN, 
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, 
                 "%s: %d: Buffered List empty, nothing to delete on session %d",
                 __FUNCTION__, __LINE__,
                 sessionId);
@@ -5885,7 +5885,7 @@ static eHalStatus sme_QosDeleteBufferedRequests(tpAniSirGlobal pMac,
    while( pEntry )
    {
       pNextEntry = csrLLNext( &pSession->bufferedCommandList, pEntry, VOS_TRUE );
-      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO, 
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, 
                 "%s: %d: deleting entry from buffered List",
                 __FUNCTION__, __LINE__);
       //delete the entry from Flow List
@@ -6755,7 +6755,7 @@ void sme_QosPmcDeviceStateUpdateInd(void *callbackContext, tPmcState pmcState)
    }
    if(!HAL_STATUS_SUCCESS(status))
    {
-      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO_HIGH, 
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, 
                 "%s: %d: ignoring Device(PMC) state change to %d",
                 __FUNCTION__, __LINE__,
                 pmcState);
@@ -6781,7 +6781,7 @@ eHalStatus sme_QosProcessOutOfUapsdMode(tpAniSirGlobal pMac)
    pEntry = csrLLPeekHead( &sme_QosCb.flow_list, VOS_FALSE );
    if(!pEntry)
    {
-      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO_HIGH, 
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, 
                 "%s: %d: Flow List empty, can't search",
                 __FUNCTION__, __LINE__);
       return eHAL_STATUS_FAILURE;

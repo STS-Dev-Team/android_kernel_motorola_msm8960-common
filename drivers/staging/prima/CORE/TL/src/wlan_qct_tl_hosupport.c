@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1413,7 +1413,7 @@ VOS_STATUS WLANTL_HSDeregRSSIIndicationCB
 
    if(0 == tlCtxt->hoSupport.currentHOState.numThreshold)
    {
-      TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO,"Empty list, can not remove"));
+      TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,"Empty list, can not remove"));
       return VOS_STATUS_E_EMPTY;
    }
 
@@ -1695,43 +1695,6 @@ VOS_STATUS WLANTL_HSInit
    return status;
 }
 
-
-/*==========================================================================
-
-   FUNCTION    WLANTL_HSDeInit
-
-   DESCRIPTION 
-    
-   PARAMETERS 
-
-   RETURN VALUE
-
-============================================================================*/
-
-VOS_STATUS WLANTL_HSDeInit
-(
-   v_PVOID_t   pAdapter
-)
-{
-   WLANTL_CbType   *tlCtxt = VOS_GET_TL_CB(pAdapter);
-   VOS_STATUS       status = VOS_STATUS_SUCCESS;
-
-   if(NULL == tlCtxt)
-   {
-      TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,"Invalid TL handle"));
-      return VOS_STATUS_E_INVAL;
-   }
-
-   // Destroy the timer...      
-   status = vos_timer_destroy( &tlCtxt->hoSupport.currentTraffic.trafficTimer );
-   if ( !VOS_IS_STATUS_SUCCESS( status ) )
-   {
-      TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,"WLANTL_HSStop: Timer Destroy Fail Status %d", status));
-   }
-   return status;   
-}
-
-
 /*==========================================================================
 
    FUNCTION
@@ -1768,13 +1731,11 @@ VOS_STATUS WLANTL_HSStop
    {
       TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,"Timer Stop Failed, Status %d", status));
    }
-
-   //Deregister the traffic Status
-   tlCtxt->hoSupport.currentTraffic.idleThreshold = 0;
-   tlCtxt->hoSupport.currentTraffic.measurePeriod = 0;
-   tlCtxt->hoSupport.currentTraffic.trafficCB     = NULL;
-   tlCtxt->hoSupport.currentTraffic.usrCtxt       = NULL;
-
+   status = vos_timer_destroy(&tlCtxt->hoSupport.currentTraffic.trafficTimer);
+   if(VOS_STATUS_SUCCESS != status)
+   {
+      TLLOGE(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,"Timer Destroy Failed, Status %d", status));
+   }
    return status;   
 }
 #endif //FEATURE_WLAN_GEN6_ROAMING

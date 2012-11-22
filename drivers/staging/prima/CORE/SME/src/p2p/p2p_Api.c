@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -49,12 +49,6 @@ eHalStatus p2pProcessRemainOnChannelCmd(tpAniSirGlobal pMac, tSmeCmd *p2pRemaino
     tSirRemainOnChnReq* pMsg;
     tANI_U16 len;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, p2pRemainonChn->sessionId );
-
-    if(!pSession)
-    {
-       smsLog(pMac, LOGE, FL("  session %d not found "), p2pRemainonChn->sessionId);
-       return eHAL_STATUS_FAILURE;
-    }
 
     if( !pSession->sessionActive ) VOS_ASSERT(0);
 
@@ -241,7 +235,7 @@ eHalStatus p2pRemainOnChannel(tHalHandle hHal, tANI_U8 sessionId,
 }
 
 eHalStatus p2pSendAction(tHalHandle hHal, tANI_U8 sessionId,
-         const tANI_U8 *pBuf, tANI_U32 len, tANI_U16 wait, tANI_BOOLEAN noack)
+         const tANI_U8 *pBuf, tANI_U32 len, tANI_U16 wait)
 {
     eHalStatus status = eHAL_STATUS_SUCCESS;
     tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
@@ -256,11 +250,10 @@ eHalStatus p2pSendAction(tHalHandle hHal, tANI_U8 sessionId,
         pMsg->type = pal_cpu_to_be16((tANI_U16)eWNI_SME_SEND_ACTION_FRAME_IND);
         pMsg->msgLen = pal_cpu_to_be16(msgLen);
         pMsg->sessionId = sessionId;
-        pMsg->noack = noack;
         pMsg->wait = (tANI_U16)wait;
-        palCopyMemory( pMac->hHdd, pMsg->data, pBuf, len );
+        palCopyMemory( pMac->hHdd, pMsg->data, pBuf, len ); 
         status = palSendMBMessage(pMac->hHdd, pMsg);
-    }
+    }                             
 
     return( status );
 }

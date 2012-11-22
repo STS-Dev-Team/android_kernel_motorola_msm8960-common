@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -580,7 +580,7 @@ ProcSetReqInternal(tpAniSirGlobal pMac, tANI_U16 length, tANI_U32 *pParam, tANI_
     if (!pMac->cfg.gCfgStatus)
     {
         cfgId = (tANI_U16)sirReadU32N((tANI_U8*)pParam);
-        PELOG1(cfgLog(pMac, LOG1, FL("CFG not ready, param %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOGE, FL("CFG not ready, param %d\n"), cfgId);)
 #if defined(ANI_OS_TYPE_LINUX) || defined(ANI_OS_TYPE_OSX)
         sirStoreU32N((tANI_U8 *) &(pMac->cfg.gParamList[WNI_CFG_SET_CNF_RES]),
                      WNI_CFG_NOT_READY);
@@ -706,7 +706,7 @@ ProcSetReqInternal(tpAniSirGlobal pMac, tANI_U16 length, tANI_U32 *pParam, tANI_
             }
             else
             {
-                PELOGW(cfgLog( pMac, LOG2, "  CFGID %d no rsp\n", cfgId);)
+                PELOGW(cfgLog( pMac, LOGW, "  CFGID %d no rsp\n", cfgId);)
             }
 
             if (valueLenRoundedUp4 > length)

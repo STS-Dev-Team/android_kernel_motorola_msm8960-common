@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -51,9 +51,6 @@
 #include "smeQosInternal.h"
 
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-#include "oemDataInternal.h"
-#endif
 
 #if defined WLAN_FEATURE_VOWIFI
 #include "sme_RrmApi.h"
@@ -116,9 +113,6 @@ typedef struct tagSmeCmd
         tRemoveKeyCmd removeKeyCmd;
         tGenericPmcCmd pmcCmd;
         tGenericQosCmd qosCmd;
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        tOemDataCmd oemDataCmd;
-#endif
 #ifdef WLAN_FEATURE_P2P
         tRemainChlCmd remainChlCmd;
         tNoACmd NoACmd;
@@ -170,9 +164,6 @@ void csrAbortCommand( tpAniSirGlobal pMac, tSmeCmd *pCommand, tANI_BOOLEAN fStop
 eHalStatus sme_AcquireGlobalLock( tSmeStruct *psSme);
 eHalStatus sme_ReleaseGlobalLock( tSmeStruct *psSme);
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-eHalStatus oemData_ProcessOemDataReqCommand(tpAniSirGlobal pMac, tSmeCmd *pCommand);
-#endif
 
 eHalStatus csrProcessAddStaSessionCommand( tpAniSirGlobal pMac, tSmeCmd *pCommand );
 eHalStatus csrProcessAddStaSessionRsp( tpAniSirGlobal pMac, tANI_U8 *pMsg);

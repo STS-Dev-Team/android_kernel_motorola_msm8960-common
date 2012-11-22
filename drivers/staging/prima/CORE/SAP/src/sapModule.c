@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2024,7 +2024,7 @@ VOS_STATUS WLANSAP_SendAction( v_PVOID_t pvosGCtx, const tANI_U8 *pBuf,
             return VOS_STATUS_E_FAULT;
         }
 
-        halStatus = sme_sendAction( hHal, pSapCtx->sessionId, pBuf, len, 0 , 0);
+        halStatus = sme_sendAction( hHal, pSapCtx->sessionId, pBuf, len, 0 );
 
         if ( eHAL_STATUS_SUCCESS == halStatus )
         {

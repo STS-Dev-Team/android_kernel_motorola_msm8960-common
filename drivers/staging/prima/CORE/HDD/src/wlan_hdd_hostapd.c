@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -203,7 +203,7 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
        goto exit;
     }
 
-    if ((!ifr) || (!ifr->ifr_data))
+    if ((!ifr) && (!ifr->ifr_data))
     {
         ret = -EINVAL;
         goto exit;
@@ -405,7 +405,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             //Check if there is any group key pending to set.
             if( pHddApCtx->groupKey.keyLength )
             {
-                 if( VOS_STATUS_SUCCESS !=  WLANSAP_SetKeySta( 
+                 if( eHAL_STATUS_SUCCESS !=  WLANSAP_SetKeySta( 
                                (WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext,
                                &pHddApCtx->groupKey ) )
                  {
@@ -419,7 +419,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 int i=0;
                 for ( i = 0; i < CSR_MAX_NUM_KEY; i++ ) 
                 {
-                    if( VOS_STATUS_SUCCESS !=  WLANSAP_SetKeySta(
+                    if( eHAL_STATUS_SUCCESS !=  WLANSAP_SetKeySta(
                                 (WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext,
                                 &pHddApCtx->wepKey[i] ) )
                     {   
@@ -464,7 +464,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             msg.src_addr.sa_family = ARPHRD_ETHER;
             memcpy(msg.src_addr.sa_data, &pSapEvent->sapevt.sapStationMICFailureEvent.staMac, sizeof(msg.src_addr.sa_data));
             hddLog(LOG1, "MIC MAC "MAC_ADDRESS_STR"\n", MAC_ADDR_ARRAY(msg.src_addr.sa_data));
-            if(pSapEvent->sapevt.sapStationMICFailureEvent.multicast == eSAP_TRUE)
+            if(pSapEvent->sapevt.sapStationMICFailureEvent.multicast == eCSR_ROAM_RESULT_MIC_ERROR_GROUP)
              msg.flags = IW_MICFAILURE_GROUP;
             else 
              msg.flags = IW_MICFAILURE_PAIRWISE;
@@ -478,7 +478,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
         cfg80211_michael_mic_failure(dev, 
                                      pSapEvent->sapevt.
                                      sapStationMICFailureEvent.staMac.bytes,
-                                     ((pSapEvent->sapevt.sapStationMICFailureEvent.multicast == eSAP_TRUE) ? 
+                                     ((pSapEvent->sapevt.sapStationMICFailureEvent.multicast == eSIR_TRUE) ? 
                                       NL80211_KEYTYPE_GROUP :
                                       NL80211_KEYTYPE_PAIRWISE),
                                      pSapEvent->sapevt.sapStationMICFailureEvent.keyId, 
@@ -546,9 +546,6 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                     staInfo.assoc_req_ies =
                         (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.ies[0];
                     staInfo.assoc_req_ies_len = iesLen;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,31))
-                    staInfo.filled |= STATION_INFO_ASSOC_REQ_IES;
-#endif
                     cfg80211_new_sta(dev,
                                  (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac.bytes[0],
                                  &staInfo, GFP_KERNEL);
@@ -574,7 +571,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             vos_status = hdd_softap_GetStaId(pHostapdAdapter, &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac, &staId);
             if (!VOS_IS_STATUS_SUCCESS(vos_status))
             {
-                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, FL("ERROR: HDD Failed to find sta id!!"));
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, ("ERROR: HDD Failed to find sta id!!\n"));
                 return VOS_STATUS_E_FAILURE;
             }
             hdd_softap_DeregisterSTA(pHostapdAdapter, staId);
@@ -853,7 +850,7 @@ static iw_softap_setparam(struct net_device *dev,
     {
 
         case QCSAP_PARAM_CLR_ACL:
-            if ( VOS_STATUS_SUCCESS != WLANSAP_ClearACL( pVosContext ))
+            if ( eHAL_STATUS_SUCCESS != WLANSAP_ClearACL( pVosContext ))
             {
                ret = -EIO;            
             }
@@ -932,7 +929,7 @@ static iw_softap_getparam(struct net_device *dev,
         break;
         
     case QCSAP_PARAM_CLR_ACL:
-        if ( VOS_STATUS_SUCCESS != WLANSAP_ClearACL( pVosContext ))
+        if ( eHAL_STATUS_SUCCESS != WLANSAP_ClearACL( pVosContext ))
         {
                ret = -EIO;            
         }               
@@ -1372,7 +1369,7 @@ static int iw_softap_set_channel_range(struct net_device *dev,
     int startChannel = value[0];
     int endChannel = value[1];
     int band = value[2];
-    VOS_STATUS status;
+    eHalStatus status;
     int ret = 0; /* success */
 
     status = WLANSAP_SetChannelRange(hHal,startChannel,endChannel,band);
@@ -1395,34 +1392,12 @@ int iw_softap_get_channel_list(struct net_device *dev,
     v_U8_t bandEndChannel = RF_CHAN_165;
     v_U32_t temp_num_channels = 0;
     hdd_adapter_t *pHostapdAdapter = (netdev_priv(dev));
-    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pHostapdAdapter);
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pHostapdAdapter);
     v_REGDOMAIN_t domainIdCurrentSoftap;
-    tpChannelListInfo channel_list = (tpChannelListInfo) extra;
-    eCsrBand curBand = eCSR_BAND_ALL;
 
-    if (eHAL_STATUS_SUCCESS != sme_GetFreqBand(hHal, &curBand))
-    {
-        hddLog(LOGE,FL("not able get the current frequency band\n"));
-        return -EIO;
-    }
+    tpChannelListInfo channel_list = (tpChannelListInfo) extra;
     wrqu->data.length = sizeof(tChannelListInfo);
     ENTER();
-
-    if (eCSR_BAND_24 == curBand)
-    {
-        bandStartChannel = RF_CHAN_1;
-        bandEndChannel = RF_CHAN_14;
-    }
-    else if (eCSR_BAND_5G == curBand)
-    {
-        bandStartChannel = RF_CHAN_36;
-        bandEndChannel = RF_CHAN_165;
-    }
-
-    hddLog(LOG1, FL("\n nBandCapability = %d, bandStartChannel = %hu, "
-                "bandEndChannel = %hu \n"), pHddCtx->cfg_ini->nBandCapability, 
-                bandStartChannel, bandEndChannel );
 
     for( i = bandStartChannel; i <= bandEndChannel; i++ )
     {
@@ -1579,8 +1554,7 @@ static int iw_set_ap_encodeext(struct net_device *dev,
     hdd_adapter_t *pHostapdAdapter = (netdev_priv(dev));
     v_CONTEXT_t pVosContext = (WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext;    
     hdd_ap_ctx_t *pHddApCtx = WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter);
-    int retval = 0;
-    VOS_STATUS vstatus;
+    eHalStatus halStatus= eHAL_STATUS_SUCCESS;
     struct iw_encode_ext *ext = (struct iw_encode_ext*)extra;
     v_U8_t groupmacaddr[WNI_CFG_BSSID_LEN] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
     int key_index;
@@ -1588,7 +1562,6 @@ static int iw_set_ap_encodeext(struct net_device *dev,
     tCsrRoamSetKey  setKey;   
 //    tCsrRoamRemoveKey RemoveKey;
     int i;
-
     ENTER();    
    
     key_index = encoding->flags & IW_ENCODE_INDEX;
@@ -1623,7 +1596,7 @@ static int iw_set_ap_encodeext(struct net_device *dev,
               break;
            case IW_ENCODE_ALG_TKIP:
               RemoveKey.encType = eCSR_ENCRYPT_TYPE_TKIP;
-              break;
+           break;
            case IW_ENCODE_ALG_CCMP:
               RemoveKey.encType = eCSR_ENCRYPT_TYPE_AES;
               break;
@@ -1636,17 +1609,16 @@ static int iw_set_ap_encodeext(struct net_device *dev,
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s: Peer Mac = "MAC_ADDRESS_STR"\n",
                     __FUNCTION__, MAC_ADDR_ARRAY(RemoveKey.peerMac));
           );
-         vstatus = WLANSAP_DelKeySta( pVosContext, &RemoveKey);
-         if ( vstatus != VOS_STATUS_SUCCESS )
+         halStatus = WLANSAP_DelKeySta( pVosContext, &RemoveKey);
+         if ( halStatus != eHAL_STATUS_SUCCESS )
          {
              VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, "[%4d] WLANSAP_DeleteKeysSta returned ERROR status= %d",
-                        __LINE__, vstatus );
-             retval = -EINVAL;
+                        __LINE__, halStatus );
          }
-#endif
-         return retval;
+#endif         
+         return halStatus;
 
-    }
+    }   
     
     vos_mem_zero(&setKey,sizeof(tCsrRoamSetKey));
    
@@ -1740,19 +1712,16 @@ static int iw_set_ap_encodeext(struct net_device *dev,
           ("%02x"), setKey.Key[i]);    
     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
           ("\n"));
-
-    vstatus = WLANSAP_SetKeySta( pVosContext, &setKey);
-    if ( vstatus != VOS_STATUS_SUCCESS )
+    halStatus = WLANSAP_SetKeySta( pVosContext, &setKey);
+    
+    if ( halStatus != eHAL_STATUS_SUCCESS )
     {
        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                   "[%4d] WLANSAP_SetKeySta returned ERROR status= %d", __LINE__, vstatus );
-       retval = -EINVAL;
-    }
+                   "[%4d] WLANSAP_SetKeySta returned ERROR status= %d", __LINE__, halStatus );
+    }   
    
-   return retval;
+   return halStatus;
 }
-
-
 static int iw_set_ap_mlme(struct net_device *dev,
                        struct iw_request_info *info,
                        union iwreq_data *wrqu,
@@ -2333,7 +2302,7 @@ int iw_get_softap_linkspeed(struct net_device *dev,
 
    if (!VOS_IS_STATUS_SUCCESS(status ))
    {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, FL("ERROR: HDD Failed to find sta id!!"));
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, ("ERROR: HDD Failed to find sta id!!\n"));
       link_speed = 0;
    }
    else
@@ -2678,7 +2647,7 @@ hdd_adapter_t* hdd_wlan_create_ap_dev( hdd_context_t *pHddCtx, tSirMacAddr macAd
         init_completion(&pHostapdAdapter->offchannel_tx_event);
 #endif
 
-        init_completion(&pHddCtx->scan_info.scan_req_completion_event);
+        init_completion(&pHostapdAdapter->scan_info.scan_req_completion_event);
 
         SET_NETDEV_DEV(pWlanHostapdDev, pHddCtx->parent_dev);
     }

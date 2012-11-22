@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -440,12 +440,6 @@ char *limMsgStr(tANI_U32 msgType)
             return "eWNI_SME_SYS_READY_IND\n";
         case eWNI_SME_SCAN_REQ:
             return "eWNI_SME_SCAN_REQ\n";
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        case eWNI_SME_OEM_DATA_REQ:
-            return "eWNI_SME_OEM_DATA_REQ\n";
-        case eWNI_SME_OEM_DATA_RSP:
-            return "eWNI_SME_OEM_DATA_RSP\n";
-#endif
         case eWNI_SME_SCAN_RSP:
             return "eWNI_SME_SCAN_RSP\n";
         case eWNI_SME_JOIN_REQ:
@@ -1378,7 +1372,7 @@ tANI_U8 limWriteDeferredMsgQ(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
             if( LIM_MAX_NUM_MGMT_FRAME_DEFERRED < count )
             {
                 //We reach the quota for management frames, drop this one
-                PELOGW(limLog(pMac, LOGW, FL("Cannot deferred. Msg: %d Too many (count=%d) already"), limMsg->type, count);)
+                PELOGE(limLog(pMac, LOGE, FL("Cannot deferred. Msg: %d Too many (count=%d) already\n"), limMsg->type, count);)
                 //Return error, caller knows what to do
                 return TX_QUEUE_FULL;
             }
@@ -6125,7 +6119,6 @@ limProcessDelTsInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
 if((psessionEntry = peFindSessionByBssid(pMac,pDelTsParam->bssId,&sessionId))== NULL)
     {
          limLog(pMac, LOGE,FL("session does not exist for given BssId\n"));
-         palFreeMemory(pMac->hHdd, (void *)(limMsg->bodyptr));
          return;
     }
 
@@ -7432,7 +7425,6 @@ void limProcessAddStaRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
     if((psessionEntry = peFindSessionBySessionId(pMac,pAddStaParams->sessionId))==NULL)
     {
         limLog(pMac, LOGP,FL("Session Does not exist for given sessionID\n"));
-        palFreeMemory(pMac, pAddStaParams);
         return;
     }
     if (psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE)
@@ -7622,7 +7614,6 @@ void limProcessAddStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    {
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to palAllocateMemory failed for Add Sta self RSP\n"));
-      palFreeMemory( pMac->hHdd, (tANI_U8 *)pAddStaSelfParams);
       return;
    }
 
@@ -7658,7 +7649,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    {
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to palAllocateMemory failed for Add Sta self RSP\n"));
-      palFreeMemory( pMac->hHdd, (tANI_U8 *)pDelStaSelfParams);
       return;
    }
 
@@ -7719,7 +7709,7 @@ v_U8_t* limGetIEPtr(tpAniSirGlobal pMac, v_U8_t *pIes, int length, v_U8_t eid,eS
         if(elem_len > left)
         {
             limLog(pMac, LOGE,
-                    FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
+                    "****Invalid IEs eid = %d elem_len=%d left=%d*****\n",
                                                     eid,elem_len,left);
             return NULL;
         }

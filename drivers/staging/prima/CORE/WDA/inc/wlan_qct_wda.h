@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -281,8 +281,6 @@ typedef enum
 #define WDA_DS_TX_START_XMIT  WLANTL_TX_START_XMIT
 #define WDA_DS_FINISH_ULA     WLANTL_FINISH_ULA
 
-/* Approximate amount of time to wait for WDA to stop WDI considering 1 pendig req too*/
-#define WDA_STOP_TIMEOUT ( (WDI_RESPONSE_TIMEOUT * 2) + WDI_SET_POWER_STATE_TIMEOUT + 5)
 /*--------------------------------------------------------------------------
   Functions
  --------------------------------------------------------------------------*/
@@ -340,6 +338,8 @@ typedef struct
    v_PVOID_t            pVosContext;             /* global VOSS context*/
    v_PVOID_t            pWdiContext;             /* WDI context */
    WDA_state            wdaState ;               /* WDA state tracking */ 
+   v_PVOID_t            wdaMsgParam ;            /* PE parameter tracking */
+   v_PVOID_t            wdaWdiApiMsgParam ;      /* WDI API paramter tracking */
    v_PVOID_t            wdaWdiCfgApiMsgParam ;   /* WDI API paramter tracking */
    vos_event_t          wdaWdiEvent;             /* WDI API sync event */
 
@@ -396,8 +396,6 @@ typedef struct
    tSirLinkState        linkState;
    /* set, when BT AMP session is going on */
    v_BOOL_t             wdaAmpSessionOn;
-   v_BOOL_t             needShutdown;
-   v_BOOL_t             wdaTimersCreated;
 } tWDA_CbContext ; 
 
 typedef struct
@@ -444,17 +442,6 @@ VOS_STATUS WDA_close(v_PVOID_t pVosContext);
  * Shutdown will not close the control transport, added by SSR
  */
 VOS_STATUS WDA_shutdown(v_PVOID_t pVosContext, wpt_boolean closeTransport);
-
-/*
- * FUNCTION: WDA_stopFailed
- * WDA stop is failed
- */
-void WDA_stopFailed(v_PVOID_t pVosContext);
-/*
- * FUNCTION: WDA_needShutdown
- * WDA requires a shutdown rather than a close
- */
-v_BOOL_t WDA_needShutdown(v_PVOID_t pVosContext);
 
 /*
  * FUNCTION: WDA_McProcessMsg
@@ -1155,12 +1142,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_SIGNAL_BTAMP_EVENT         SIR_HAL_SIGNAL_BTAMP_EVENT
 
 #ifdef ANI_CHIPSET_VOLANS
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/* PE <-> HAL OEM_DATA RELATED MESSAGES */
-#define WDA_START_OEM_DATA_REQ         SIR_HAL_START_OEM_DATA_REQ 
-#define WDA_START_OEM_DATA_RSP         SIR_HAL_START_OEM_DATA_RSP
-#define WDA_FINISH_OEM_DATA_REQ        SIR_HAL_FINISH_OEM_DATA_REQ
-#endif
 #endif
 
 #define WDA_SET_MAX_TX_POWER_REQ       SIR_HAL_SET_MAX_TX_POWER_REQ

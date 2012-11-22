@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -135,8 +135,7 @@ typedef struct sSirMbMsgP2p
      */
     tANI_U16 msgLen;
 
-    tANI_U8 sessionId;
-    tANI_U8 noack;
+    tANI_U16 sessionId;
     tANI_U16 wait;
 
     /**
@@ -425,12 +424,6 @@ typedef struct sSirMbMsgP2p
 #ifdef ANI_CHIPSET_VOLANS
 /* PE <-> HAL addr2 mismatch message */
 #define SIR_LIM_ADDR2_MISS_IND             SIR_HAL_ITC_MSG_TYPES_BEGIN + 142
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/* PE <-> HAL OEM_DATA RELATED MESSAGES */
-#define SIR_HAL_START_OEM_DATA_REQ         SIR_HAL_ITC_MSG_TYPES_BEGIN + 143
-#define SIR_HAL_START_OEM_DATA_RSP       SIR_HAL_ITC_MSG_TYPES_BEGIN + 144
-#define SIR_HAL_FINISH_OEM_DATA_REQ      SIR_HAL_ITC_MSG_TYPES_BEGIN + 145
-#endif
 #endif
 
 #define SIR_HAL_SET_MAX_TX_POWER_REQ       SIR_HAL_ITC_MSG_TYPES_BEGIN + 146

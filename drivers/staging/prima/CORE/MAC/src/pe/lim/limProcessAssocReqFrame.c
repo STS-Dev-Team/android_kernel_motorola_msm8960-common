@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -210,15 +210,13 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
         // Received Re/Assoc Req frame from a BC/MC address
         // Log error and ignore it
         if (subType == LIM_ASSOC)
-			limLog(pMac, LOGW, FL("received Assoc frame from a BC/MC address "MAC_ADDRESS_STR),
-                   MAC_ADDR_ARRAY(pHdr->sa));
+            limLog(pMac, LOG1, FL("received Assoc frame from a BC/MC address\n"));
         else
-            limLog(pMac, LOGW, FL("received ReAssoc frame from a BC/MC address "MAC_ADDRESS_STR),
-                   MAC_ADDR_ARRAY(pHdr->sa));
+            limLog(pMac, LOG1, FL("received ReAssoc frame from a BC/MC address\n"));
+        limPrintMacAddr(pMac, pHdr->sa, LOG1);
         return;
     }
-    limLog(pMac, LOGW, FL("Received AssocReq Frame: "MAC_ADDRESS_STR), MAC_ADDR_ARRAY(pHdr->sa));
-
+    limLog(pMac, LOG2, FL("Received AssocReq Frame: "));
     sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG2, (tANI_U8 *) pBody, framelen);
 
 #ifdef WLAN_SOFTAP_FEATURE
@@ -284,17 +282,16 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                         pHdr->sa,
                         subType, 0,psessionEntry);
 
-        limLog(pMac, LOGW, FL("local caps 0x%x received 0x%x\n"), localCapabilities, pAssocReq->capabilityInfo);
+        limLog(pMac, LOG1, FL("local caps 0x%x received 0x%x\n"), localCapabilities, pAssocReq->capabilityInfo);
 
         // Log error
         if (subType == LIM_ASSOC)
-            limLog(pMac, LOGW,
-               FL("received Assoc req with unsupported capabilities "MAC_ADDRESS_STR),
-                  MAC_ADDR_ARRAY(pHdr->sa));
+            limLog(pMac, LOG1,
+               FL("received Assoc req with unsupported capabilities from\n"));
         else
-            limLog(pMac, LOGW,
-                   FL("received ReAssoc req with unsupported capabilities "MAC_ADDRESS_STR),
-                   MAC_ADDR_ARRAY(pHdr->sa));
+            limLog(pMac, LOG1,
+               FL("received ReAssoc req with unsupported capabilities from\n"));
+        limPrintMacAddr(pMac, pHdr->sa, LOG1);
         goto error;
     }
 
@@ -819,13 +816,12 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
             // Log error
             if (subType == LIM_ASSOC)
-                limLog(pMac, LOGW,
-                       FL("received Assoc req from STA that does not have pre-auth context "MAC_ADDRESS_STR),
-                       MAC_ADDR_ARRAY(pHdr->sa));
+                limLog(pMac, LOG1,
+                       FL("received Assoc req from STA that does not have pre-auth context, MAC addr is: \n"));
             else
-                limLog(pMac, LOGW,
-                       FL("received ReAssoc req from STA that does not have pre-auth context "
-                       MAC_ADDRESS_STR), MAC_ADDR_ARRAY(pHdr->sa));
+                limLog(pMac, LOG1,
+                       FL("received ReAssoc req from STA that does not have pre-auth context, MAC addr is: \n"));
+            limPrintMacAddr(pMac, pHdr->sa, LOG1);
             goto error;
         }
 
@@ -864,7 +860,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
             }
             limPrintMacAddr(pMac, pHdr->sa, LOG1);
             limPrintMlmState(pMac, LOG1, (tLimMlmStates) pStaDs->mlmStaContext.mlmState);
-
             goto error;
         } // if (pStaDs->mlmStaContext.mlmState != eLIM_MLM_LINK_ESTABLISHED_STATE)
 
@@ -952,11 +947,10 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
      * STA is Associated !
      */
     if (subType == LIM_ASSOC)
-        limLog(pMac, LOGW, FL("received Assoc req successful "MAC_ADDRESS_STR),
-               MAC_ADDR_ARRAY(pHdr->sa));
+        limLog(pMac, LOG1, FL("received Assoc req successful from "));
     else
-        limLog(pMac, LOGW, FL("received ReAssoc req successful"MAC_ADDRESS_STR),
-               MAC_ADDR_ARRAY(pHdr->sa));
+        limLog(pMac, LOG1, FL("received ReAssoc req successful from "));
+    limPrintMacAddr(pMac, pHdr->sa, LOG1);
 
     /**
      * Assign unused/least recently used AID from perStaDs.
@@ -1252,11 +1246,8 @@ error:
         }
     }
 
-    /* If it is not duplicate Assoc request then only make to Null */
-    if ((pStaDs != NULL) &&
-          (pStaDs->mlmStaContext.mlmState != eLIM_MLM_WT_ADD_STA_RSP_STATE))
+    if(pStaDs!= NULL)
         psessionEntry->parsedAssocReq[pStaDs->assocId] = NULL;
-
     return;
 
 } /*** end limProcessAssocReqFrame() ***/

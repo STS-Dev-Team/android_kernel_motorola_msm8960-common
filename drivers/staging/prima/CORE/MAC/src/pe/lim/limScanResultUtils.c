@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -353,7 +353,6 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
     tANI_U32              frameLen, ieLen = 0;
     tANI_U8               rxChannelInBeacon = 0;
     eHalStatus            status;
-    tANI_U8               dontUpdateAll = 0;
 
     /**
      * Compare SSID with the one sent in
@@ -403,23 +402,10 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
           /* This means that we are in 2.4GHz mode */
           if(WDA_GET_RX_CH(pRxPacketInfo) != rxChannelInBeacon)
           {
-                          /* BCAST Frame, if CH do not match, Drop */
-             if(WDA_IS_RX_BCAST(pRxPacketInfo))
-             {
-                limLog(pMac, LOG3, FL("Beacon/Probe Rsp dropped. Channel in BD %d. "
-                                      "Channel in beacon" " %d\n"),
-                       WDA_GET_RX_CH(pRxPacketInfo),limGetChannelFromBeacon(pMac, pBPR));
-                return;
-             }
-             /* Unit cast frame, Probe RSP, do not drop */
-             else
-             {
-                dontUpdateAll = 1;
-                limLog(pMac, LOG3, FL("SSID %s, CH in ProbeRsp %d, CH in BD %d, miss-match, Do Not Drop"),
-                                       pBPR->ssId.ssId,
-                                       rxChannelInBeacon,
-                                       limGetChannelFromBeacon(pMac, pBPR));
-             }
+             limLog(pMac, LOGW, FL("Beacon/Probe Rsp dropped. Channel in BD %d. "
+                                   "Channel in beacon" " %d\n"), 
+                    WDA_GET_RX_CH(pRxPacketInfo),limGetChannelFromBeacon(pMac, pBPR));
+             return;
           }
        }
     }
@@ -461,11 +447,11 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
     //If it is not scanning, only save unique results
     if (pMac->lim.gLimReturnUniqueResults || (!fScanning))
     {
-        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_UPDATE, dontUpdateAll);
+        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_UPDATE);
     }
     else
     {
-        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_ADD, dontUpdateAll);
+        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_ADD);
     }
 
     if(fScanning)
@@ -611,14 +597,12 @@ limInitHashTable(tpAniSirGlobal pMac)
 
 eHalStatus
 limLookupNaddHashEntry(tpAniSirGlobal pMac,
-                       tLimScanResultNode *pBssDescr, tANI_U8 action,
-                       tANI_U8 dontUpdateAll)
+                       tLimScanResultNode *pBssDescr, tANI_U8 action)
 {
     tANI_U8                  index, ssidLen = 0;
     tANI_U8                found = false;
     tLimScanResultNode *ptemp, *pprev;
     tSirMacCapabilityInfo *pSirCap, *pSirCapTemp;
-    tANI_S8  rssi = 0;
 
     index = limScanHashFunction(pBssDescr->bssDescription.bssId);
     ptemp = pMac->lim.gLimCachedScanHashTable[index];
@@ -635,8 +619,6 @@ limLookupNaddHashEntry(tpAniSirGlobal pMac,
             (palEqualMemory( pMac->hHdd,(tANI_U8 *) pBssDescr->bssDescription.bssId,
                       (tANI_U8 *) ptemp->bssDescription.bssId,
                       sizeof(tSirMacAddr))) &&   //matching BSSID
-            (pBssDescr->bssDescription.channelId ==
-                                      ptemp->bssDescription.channelId) &&
             ((pSirCapTemp->ess) ||    //we are done for infrastructure
             //For IBSS, matching SSID, nwType and channelId
             ((palEqualMemory( pMac->hHdd,((tANI_U8 *) &pBssDescr->bssDescription.ieFields + 1),
@@ -651,10 +633,6 @@ limLookupNaddHashEntry(tpAniSirGlobal pMac,
             // Found the same BSS description
             if (action == LIM_HASH_UPDATE)
             {
-                if(dontUpdateAll)
-                {
-                   rssi = ptemp->bssDescription.rssi;
-                }
 
                 if(NULL != pMac->lim.gpLimMlmScanReq)
                 {
@@ -678,12 +656,6 @@ limLookupNaddHashEntry(tpAniSirGlobal pMac,
             found = true;
             break;
         }
-    }
-
-    //for now, only rssi, we can add more if needed
-    if ((action == LIM_HASH_UPDATE) && dontUpdateAll)
-    {
-        pBssDescr->bssDescription.rssi = rssi;
     }
 
     // Add this BSS description at same index

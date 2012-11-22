@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -133,7 +133,7 @@ int limProcessRemainOnChnlReq(tpAniSirGlobal pMac, tANI_U32 *pMsg)
                 /* get the duration from the request */
                 val = SYS_MS_TO_TICKS(MsgBuff->duration);
 
-                limLog( pMac, LOG2, "Start listen duration = %d", val);
+                limLog( pMac, LOGE, "Start listen duration = %d", val);
                 if (tx_timer_change(
                         &pMac->lim.limTimers.gLimRemainOnChannelTimer, val, 0)
                                           != TX_SUCCESS)
@@ -287,7 +287,7 @@ void limRemainOnChnlSetLinkStat(tpAniSirGlobal pMac, eHalStatus status,
       /* get the duration from the request */
     val = SYS_MS_TO_TICKS(MsgRemainonChannel->duration);
 
-    limLog( pMac, LOG2, "Start listen duration = %d", val);
+    limLog( pMac, LOGE, "Start listen duration = %d", val);
     if (tx_timer_change(&pMac->lim.limTimers.gLimRemainOnChannelTimer,
                                                 val, 0) != TX_SUCCESS)
     {
@@ -588,7 +588,7 @@ void limSetHtCaps(tpAniSirGlobal pMac,tANI_U8 *pIeStartPtr,tANI_U32 nBytes)
     PopulateDot11fHTCaps(pMac,&dot11HtCap);
     pIe = limGetIEPtr(pMac,pIeStartPtr, nBytes,
                                        DOT11F_EID_HTCAPS,ONE_BYTE);
-   limLog( pMac, LOG2, FL("pIe 0x%x dot11HtCap.supportedMCSSet[0]=0x%x"),
+   limLog( pMac, LOGE, FL("pIe 0x%x dot11HtCap.supportedMCSSet[0]=0x%x"),
         (tANI_U32)pIe,dot11HtCap.supportedMCSSet[0]);
     if(pIe)
     {
@@ -809,7 +809,7 @@ void limSendP2PActionFrame(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
         if (SIR_MAC_MGMT_PROBE_RSP == pFc->subType)
         {
             limSetHtCaps( pMac,(tANI_U8*)pMbMsg->data + PROBE_RSP_IE_OFFSET,
-                           nBytes - PROBE_RSP_IE_OFFSET);
+                           nBytes);
         }
         
         /* The minimum wait for any action frame should be atleast 100 ms.
@@ -892,20 +892,15 @@ void limSendP2PActionFrame(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
      */
     txFlag |= HAL_USE_BD_RATE2_FOR_MANAGEMENT_FRAME;
 
-    if ( (SIR_MAC_MGMT_PROBE_RSP == pFc->subType) ||
-         (pMbMsg->noack)
-        )
+    if (SIR_MAC_MGMT_PROBE_RSP == pFc->subType)
     {
         halstatus = halTxFrame( pMac, pPacket, (tANI_U16)nBytes,
                         HAL_TXRX_FRM_802_11_MGMT, ANI_TXDIR_TODS,
                         7,/*SMAC_SWBD_TX_TID_MGMT_HIGH */ limTxComplete, pFrame,
                         txFlag );
 
-        if (!pMbMsg->noack)
-        {
-           limSendSmeRsp(pMac, eWNI_SME_ACTION_FRAME_SEND_CNF, 
+        limSendSmeRsp(pMac, eWNI_SME_ACTION_FRAME_SEND_CNF, 
                halstatus, pMbMsg->sessionId, 0);
-        }
         pMac->lim.actionFrameSessionId = 0xff;
     }
     else
@@ -925,7 +920,7 @@ void limSendP2PActionFrame(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
         else
         {
              pMac->lim.actionFrameSessionId = pMbMsg->sessionId;
-             limLog( pMac, LOG2, FL("lim.actionFrameSessionId = %lu\n" ), 
+             limLog( pMac, LOGE, FL("lim.actionFrameSessionId = %lu\n" ), 
                      pMac->lim.actionFrameSessionId);
 
         }

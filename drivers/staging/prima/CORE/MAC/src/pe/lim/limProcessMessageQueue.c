@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -101,7 +101,7 @@ defMsgDecision(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
       // Defer processsing this message
       if (limDeferMsg(pMac, limMsg) != TX_SUCCESS)
       {
-          PELOGW(limLog(pMac, LOGW, FL("Unable to Defer message(0x%X) %s limSmeState %d (prev sme state %d) sysRole %d mlm state %d (prev mlm state %d)"),
+          PELOGE(limLog(pMac, LOGE, FL("Unable to Defer message(0x%X) %s limSmeState %d (prev sme state %d) sysRole %d mlm state %d (prev mlm state %d)\n"),
                    limMsg->type, limMsgStr(limMsg->type), pMac->lim.gLimSmeState,  pMac->lim.gLimPrevSmeState,
                    pMac->lim.gLimSystemRole,  pMac->lim.gLimMlmState,  pMac->lim.gLimPrevMlmState);)
           limLogSessionStates(pMac);
@@ -141,9 +141,6 @@ defMsgDecision(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 #ifdef WLAN_FEATURE_P2P 
         (limMsg->type != WDA_P2P_NOA_ATTR_IND) &&
 #endif
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        (limMsg->type != WDA_START_OEM_DATA_RSP) &&
-#endif
         (limMsg->type != WDA_ADD_TS_RSP))
     {
         PELOG1(limLog(pMac, LOG1, FL("Defer the current message %s , gLimProcessDefdMsgs is false and system is not in scan/learn mode\n"),
@@ -152,7 +149,7 @@ defMsgDecision(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
         // Defer processsing this message
         if (limDeferMsg(pMac, limMsg) != TX_SUCCESS)
         {
-            PELOGW(limLog(pMac, LOGW, FL("Unable to Defer message(0x%X) %s limSmeState %d (prev sme state %d) sysRole %d mlm state %d (prev mlm state %d)"),
+            PELOGE(limLog(pMac, LOGE, FL("Unable to Defer message(0x%X) %s limSmeState %d (prev sme state %d) sysRole %d mlm state %d (prev mlm state %d)\n"),
                    limMsg->type, limMsgStr(limMsg->type), pMac->lim.gLimSmeState,  pMac->lim.gLimPrevSmeState,
                    pMac->lim.gLimSystemRole,  pMac->lim.gLimMlmState,  pMac->lim.gLimPrevMlmState);)
             limLogSessionStates(pMac);
@@ -688,10 +685,10 @@ limHandle80211Frames(tpAniSirGlobal pMac, tpSirMsgQ limMsg, tANI_U8 *pDeferMsg)
 
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
     fc = pHdr->fc;
-
-    limLog( pMac, LOG4, FL("ProtVersion %d, Type %d, Subtype %d rateIndex=%d\n"),
+    limLog( pMac, LOG1, FL("ProtVersion %d, Type %d, Subtype %d rateIndex=%d\n"),
             fc.protVer, fc.type, fc.subType, WDA_GET_RX_MAC_RATE_IDX(pRxPacketInfo));
    
+
     /* Added For BT-AMP Support */
     if((psessionEntry = peFindSessionByBssid(pMac,pHdr->bssId,&sessionId))== NULL)
         {
@@ -927,7 +924,7 @@ limProcessAbortScanInd(tpAniSirGlobal pMac)
      * SME should send WNI_CFG_BACKGROUND_SCAN_PERIOD indication 
      * to start the background scan again
      */
-    PELOG2(limLog(pMac, LOG2, FL("Processing AbortScan Ind"));)
+    PELOGE(limLog(pMac, LOGE, FL("Processing AbortScan Ind\n"));)
 
     limAbortBackgroundScan(pMac);
 
@@ -1008,61 +1005,6 @@ void limMessageProcessor(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     }
 }
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-
-void limOemDataRspHandleResumeLinkRsp(tpAniSirGlobal pMac, eHalStatus status, tANI_U32* mlmOemDataRsp)
-{
-    if(status != eHAL_STATUS_SUCCESS)
-    {
-        limLog(pMac, LOGE, FL("OEM Data Rsp failed to get the response for resume link\n"));
-    }
-
-    if(NULL != pMac->lim.gpLimMlmOemDataReq)
-    {
-        palFreeMemory(pMac->hHdd, pMac->lim.gpLimMlmOemDataReq);
-        pMac->lim.gpLimMlmOemDataReq = NULL;
-    }
-
-    //"Failure" status doesn't mean that Oem Data Rsp did not happen
-    //and hence we need to respond to upper layers. Only Resume link is failed, but
-    //we got the oem data response already.
-    //Post the meessage to MLM
-    limPostSmeMessage(pMac, LIM_MLM_OEM_DATA_CNF, (tANI_U32*)(mlmOemDataRsp));
-
-    return;
-}
-
-void limProcessOemDataRsp(tpAniSirGlobal pMac, tANI_U32* body)
-{
-    eHalStatus status = eHAL_STATUS_SUCCESS;
-    tpLimMlmOemDataRsp mlmOemDataRsp = NULL;
-    tpStartOemDataRsp oemDataRsp = NULL;
-
-    //Process all the messages for the lim queue
-    SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
-
-    oemDataRsp = (tpStartOemDataRsp)(body);
-
-    status = palAllocateMemory(pMac->hHdd, (void**)(&mlmOemDataRsp), sizeof(tLimMlmOemDataRsp));
-    if(status != eHAL_STATUS_SUCCESS)
-    {
-        limLog(pMac, LOGP, FL("could not allocate memory for mlmOemDataRsp\n"));
-        return;
-    }
-
-    //copy the memory into tLimMlmOemDataRsp and free the tStartOemDataRsp
-    //the structures tStartOemDataRsp and tLimMlmOemDataRsp have the same structure
-    palCopyMemory(pMac->hHdd, (void*)(mlmOemDataRsp), (void*)(oemDataRsp), sizeof(tLimMlmOemDataRsp));
-
-    //Now free the incoming memory
-    palFreeMemory(pMac->hHdd, (void*)(oemDataRsp));
-
-    limResumeLink(pMac, limOemDataRspHandleResumeLinkRsp, (tANI_U32*)mlmOemDataRsp);
-
-    return;
-}
-
-#endif
 
 
 /**
@@ -1101,8 +1043,6 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 #endif
     if(pMac->gDriverType == eDRIVER_TYPE_MFG)
     {
-        palFreeMemory(pMac->hHdd, (tANI_U8 *)limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 #ifdef WLAN_DEBUG    
@@ -1206,11 +1146,6 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
         case WDA_FINISH_SCAN_RSP:
             limProcessFinishScanRsp(pMac, limMsg->bodyptr);
             break;
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        case WDA_START_OEM_DATA_RSP:
-            limProcessOemDataRsp(pMac, limMsg->bodyptr);
-            break;
-#endif
 
         case WDA_SWITCH_CHANNEL_RSP:
             limProcessSwitchChannelRsp(pMac, limMsg->bodyptr);
@@ -1293,9 +1228,6 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
         case eWNI_SME_STAT_SUMM_REQ:
         case eWNI_SME_GET_SCANNED_CHANNEL_REQ:
         case eWNI_SME_GET_STATISTICS_REQ:
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        case eWNI_SME_OEM_DATA_REQ:
-#endif
             // These messages are from HDD
             limProcessNormalHddMsg(pMac, limMsg, true);  //need to response to hdd
             break;
@@ -1433,7 +1365,7 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
                         palCopyMemory(pMac->hHdd,&psessionEntry->p2pGoPsUpdate, limMsg->bodyptr,sizeof(tSirP2PNoaAttr));
                         
                         
-                        limLog(pMac, LOG2, FL(" &psessionEntry->bssId%02x:%02x:%02x:%02x:%02x:%02x ctWin=%d oppPsFlag=%d\n"),
+                        limLog(pMac, LOGE, FL(" &psessionEntry->bssId%02x:%02x:%02x:%02x:%02x:%02x ctWin=%d oppPsFlag=%d\n"),
                                      psessionEntry->bssId[0],
                                      psessionEntry->bssId[1],
                                      psessionEntry->bssId[2],
@@ -1443,7 +1375,7 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
                                      psessionEntry->p2pGoPsUpdate.ctWin,
                                      psessionEntry->p2pGoPsUpdate.oppPsFlag);
 
-                        limLog(pMac, LOG2, FL(" uNoa1IntervalCnt=%d uNoa1Duration=%d uNoa1Interval=%d uNoa1StartTime=%d\n"),
+                        limLog(pMac, LOGE, FL(" uNoa1IntervalCnt=%d uNoa1Duration=%d uNoa1Interval=%d uNoa1StartTime=%d\n"),
                                      psessionEntry->p2pGoPsUpdate.uNoa1IntervalCnt,
                                      psessionEntry->p2pGoPsUpdate.uNoa1Duration,
                                      psessionEntry->p2pGoPsUpdate.uNoa1Interval,
@@ -2121,7 +2053,7 @@ void limLogSessionStates(tpAniSirGlobal pMac)
     {
         if(pMac->lim.gpSession[i].valid)
         {
-            PELOG1(limLog(pMac, LOG1, FL("Session[%d] sysRole(%d) limSmeState %d (prev sme state %d) mlm state %d (prev mlm state %d)"),
+            PELOGE(limLog(pMac, LOGE, FL("Session[%d] sysRole(%d) limSmeState %d (prev sme state %d) mlm state %d (prev mlm state %d)\n"),
                    i, pMac->lim.gpSession[i].limSystemRole,  pMac->lim.gpSession[i].limSmeState,  
                    pMac->lim.gpSession[i].limPrevSmeState,   pMac->lim.gpSession[i].limMlmState,  
                    pMac->lim.gpSession[i].limPrevMlmState);)

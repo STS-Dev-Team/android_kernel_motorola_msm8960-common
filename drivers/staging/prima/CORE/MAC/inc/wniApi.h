@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -106,10 +106,6 @@ enum eWniMsgTypes
     eWNI_SME_SCAN_REQ,
     eWNI_SME_SCAN_ABORT_IND,
     eWNI_SME_SCAN_RSP,
-#ifdef FEATURE_OEM_DATA_SUPPORT
-    eWNI_SME_OEM_DATA_REQ,
-    eWNI_SME_OEM_DATA_RSP,
-#endif
     eWNI_SME_JOIN_REQ,
     eWNI_SME_JOIN_RSP,
     eWNI_SME_SETCONTEXT_REQ,

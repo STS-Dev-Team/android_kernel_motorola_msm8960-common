@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -738,7 +738,6 @@ static void hdd_conf_suspend_ind(hdd_context_t* pHddCtx,
                                  hdd_adapter_t *pAdapter)
 {
     eHalStatus halStatus = eHAL_STATUS_FAILURE;
-    VOS_STATUS vstatus;
     tpSirWlanSuspendParam wlanSuspendParam =
       vos_mem_malloc(sizeof(tSirWlanSuspendParam));
 
@@ -758,12 +757,12 @@ static void hdd_conf_suspend_ind(hdd_context_t* pHddCtx,
            (eConnectionState_Associated == 
             (WLAN_HDD_GET_STATION_CTX_PTR(pAdapter))->conn_info.connState)) 
         {
-            vstatus = hdd_conf_hostarpoffload(pHddCtx, TRUE);
-            if (!VOS_IS_STATUS_SUCCESS(vstatus))
+            halStatus = hdd_conf_hostarpoffload(pHddCtx, TRUE);
+            if (!VOS_IS_STATUS_SUCCESS(halStatus))
             {
                 hddLog(VOS_TRACE_LEVEL_INFO,
                        "%s:Failed to enable ARPOFFLOAD Feature %d\n",
-                       __func__, vstatus);
+                       __func__, halStatus);
             }
         }
 
@@ -792,7 +791,7 @@ static void hdd_conf_suspend_ind(hdd_context_t* pHddCtx,
 
 static void hdd_conf_resume_ind(hdd_context_t* pHddCtx)
 {
-    VOS_STATUS vstatus;
+    eHalStatus halStatus = eHAL_STATUS_FAILURE;
     tpSirWlanResumeParam wlanResumeParam =
       vos_mem_malloc(sizeof(tSirWlanResumeParam));
 
@@ -808,11 +807,11 @@ static void hdd_conf_resume_ind(hdd_context_t* pHddCtx)
 
     if(pHddCtx->cfg_ini->fhostArpOffload)
     {
-        vstatus = hdd_conf_hostarpoffload(pHddCtx, FALSE);
-        if (!VOS_IS_STATUS_SUCCESS(vstatus))
+        halStatus = hdd_conf_hostarpoffload(pHddCtx, FALSE);
+        if (!VOS_IS_STATUS_SUCCESS(halStatus))
         {
             hddLog(VOS_TRACE_LEVEL_INFO, "%s:Failed to disable ARPOFFLOAD "
-                  "Feature %d\n", __func__, vstatus);
+                  "Feature %d\n", __func__, halStatus);
         }
     }
     if (pHddCtx->dynamic_mcbc_filter.enableSuspend)
@@ -2069,21 +2068,12 @@ VOS_STATUS hdd_wlan_re_init(void)
    goto success;
 
 err_unregister_pmops:
-#ifdef CONFIG_HAS_EARLYSUSPEND
-   /* unregister suspend/resume callbacks */
-   if (pHddCtx->cfg_ini->nEnableSuspend)
-      unregister_wlan_suspend();
-#endif
    hddDeregisterPmOps(pHddCtx);
 
 err_bap_stop:
-#ifdef CONFIG_HAS_EARLYSUSPEND
-   hdd_unregister_mcast_bcast_filter(pHddCtx);
-#endif
-   hdd_close_all_adapters(pHddCtx);
-#ifdef WLAN_BTAMP_FEATURE
   WLANBAP_Stop(pVosContext);
 
+#ifdef WLAN_BTAMP_FEATURE
 err_bap_close:
    WLANBAP_Close(pVosContext);
 #endif
@@ -2096,11 +2086,17 @@ err_vosclose:
    vos_sched_close(pVosContext);
    if (pHddCtx)
    {
+#ifdef CONFIG_HAS_EARLYSUSPEND
+       /* unregister suspend/resume callbacks */
+       if (pHddCtx->cfg_ini->nEnableSuspend)
+           unregister_wlan_suspend();
+#endif
        /* Unregister the Net Device Notifier */
        unregister_netdevice_notifier(&hdd_netdev_notifier);
        /* Clean up HDD Nlink Service */
        send_btc_nlink_msg(WLAN_MODULE_DOWN_IND, 0);
        nl_srv_exit();
+       hdd_close_all_adapters(pHddCtx);
        /* Free up dynamically allocated members inside HDD Adapter */
        kfree(pHddCtx->cfg_ini);
        pHddCtx->cfg_ini= NULL;

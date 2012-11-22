@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -353,7 +353,6 @@ typedef enum device_mode
 #ifdef ANI_MANF_DIAG
    ,WLAN_HDD_FTM,
 #endif
-   WLAN_HDD_P2P_DEVICE
 }device_mode_t;
 
 typedef enum rem_on_channel_request_type
@@ -404,13 +403,6 @@ typedef struct hdd_cfg80211_state_s
 }hdd_cfg80211_state_t;
 
 #endif
-
-typedef enum{
-    HDD_SSR_NOT_REQUIRED,
-    HDD_SSR_REQUIRED,
-    HDD_SSR_DISABLED,
-}e_hdd_ssr_required;
-
 struct hdd_station_ctx
 {
   /** Handle to the Wireless Extension State */
@@ -596,6 +588,12 @@ struct hdd_adapter_s
    sHddMib_t  hdd_mib;
            
    tANI_U8 sessionId;
+#ifdef WLAN_FEATURE_P2P   
+   /** p2pSessionId required to open new SME session for P2P 
+    *  Device address which is different from STA MAC Address
+    */ 
+   tANI_U8 p2pSessionId;
+#endif
 
    /* Completion variable for session close */
    struct completion session_close_comp_var;
@@ -678,6 +676,7 @@ struct hdd_adapter_s
 #endif
    }sessionCtx;
 
+   hdd_scaninfo_t scan_info;
 #ifdef CONFIG_CFG80211
    hdd_cfg80211_state_t cfg80211State;
 #endif
@@ -829,19 +828,6 @@ struct hdd_context_s
    /** P2P Device MAC Address for the adapter  */
    v_MACADDR_t p2pDeviceAddress;
 #endif
-
-   /* 
-    * Framework initiated driver restarting 
-    *    hdd_reload_timer   : Restart retry timer
-    *    isRestartInProgress: Restart in progress
-    *    hdd_restart_retries: Restart retries
-    *
-    */
-   vos_timer_t hdd_restart_timer;
-   atomic_t isRestartInProgress;
-   u_int8_t hdd_restart_retries;
-   
-   hdd_scaninfo_t scan_info;
 };
 
 
@@ -906,7 +892,6 @@ void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode)
 void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter);
 void hdd_prevent_suspend(void);
 void hdd_allow_suspend(void);
-bool hdd_is_ssr_required(void);
-void hdd_set_ssr_required(e_hdd_ssr_required value);
-VOS_STATUS wlan_hdd_restart_driver(hdd_context_t *pHddCtx);
+v_U8_t hdd_is_ssr_required(void);
+void hdd_set_ssr_required(v_U8_t value);
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

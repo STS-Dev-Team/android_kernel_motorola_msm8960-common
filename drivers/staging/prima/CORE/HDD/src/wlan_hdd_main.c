@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -138,24 +138,11 @@ int wlan_hdd_ftm_start(hdd_context_t *pAdapter);
 #define MEMORY_DEBUG_STR ""
 #endif
 
-/*
- * The rate at which the driver sends RESTART event to supplicant
- * once the function 'vos_wlanRestart()' is called
- *
- */
-#define WLAN_HDD_RESTART_RETRY_DELAY_MS 5000  /* 5 second */
-#define WLAN_HDD_RESTART_RETRY_MAX_CNT  5     /* 5 retries */
-
 static struct wake_lock wlan_wake_lock;
 /* set when SSR is needed after unload */
-static e_hdd_ssr_required isSsrRequired = HDD_SSR_NOT_REQUIRED;
+static v_U8_t      isSsrRequired;
 
 //internal function declaration
-static VOS_STATUS wlan_hdd_framework_restart(hdd_context_t *pHddCtx);
-static void wlan_hdd_restart_init(hdd_context_t *pHddCtx);
-static void wlan_hdd_restart_deinit(hdd_context_t *pHddCtx);
-void wlan_hdd_restart_timer_cb(v_PVOID_t usrDataForCallback);
-
 v_U16_t hdd_select_queue(struct net_device *dev,
     struct sk_buff *skb);
 
@@ -169,7 +156,9 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
 {
    struct net_device *dev = ndev;
    hdd_adapter_t *pAdapter = NULL;
+#ifdef WLAN_BTAMP_FEATURE
    hdd_context_t *pHddCtx = NULL;
+#endif
 
    //Make sure that this callback corresponds to our device.
    if((strncmp( dev->name, "wlan", 4 )) && 
@@ -183,7 +172,6 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
 #endif
 
    pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
-   pHddCtx = WLAN_HDD_GET_CTX( pAdapter );
 
    if(NULL == pAdapter)
    {
@@ -216,7 +204,7 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
         break;
 
    case NETDEV_GOING_DOWN:
-        if( pHddCtx->scan_info.mScanPending != FALSE )
+        if( pAdapter->scan_info.mScanPending != FALSE )
         { 
            int result;
            INIT_COMPLETION(pAdapter->abortscan_event_var);
@@ -238,6 +226,7 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
         }
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: disabling AMP", __FUNCTION__);
 #ifdef WLAN_BTAMP_FEATURE
+        pHddCtx = WLAN_HDD_GET_CTX( pAdapter );
         msleep(500);
         if ( pHddCtx->isAmpAllowed )
         {
@@ -331,7 +320,7 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
       goto exit; 
    }
 
-   if ((!ifr) || (!ifr->ifr_data))
+   if ((!ifr) && (!ifr->ifr_data))
    {
        ret = -EINVAL;
        goto exit; 
@@ -384,7 +373,7 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
    
            /* First 8 bytes will have "SETBAND " and 
             * 9 byte will have band setting value */
-           VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+           VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                     "%s: SetBandCommand Info  comm %s UL %d, TL %d", __FUNCTION__, priv_data.buf, priv_data.used_len, priv_data.total_len);
         
            /* Change band request received */
@@ -760,7 +749,7 @@ void hdd_full_pwr_cbk(void *callbackContext, eHalStatus status)
 {
    hdd_context_t *pHddCtx = (hdd_context_t*)callbackContext;
 
-   hddLog(VOS_TRACE_LEVEL_INFO_HIGH,"HDD full Power callback status = %d", status);
+   hddLog(VOS_TRACE_LEVEL_ERROR,"HDD full Power callback status = %d", status);
    if(&pHddCtx->full_pwr_comp_var)
    {
       complete(&pHddCtx->full_pwr_comp_var);
@@ -1069,7 +1058,7 @@ hdd_adapter_t* hdd_alloc_station_adapter( hdd_context_t *pHddCtx, tSirMacAddr ma
       init_completion(&pHddCtx->mc_sus_event_var);
       init_completion(&pHddCtx->tx_sus_event_var);
 
-      init_completion(&pHddCtx->scan_info.scan_req_completion_event);
+      init_completion(&pAdapter->scan_info.scan_req_completion_event);
 
       pAdapter->isLinkUpSvcNeeded = FALSE; 
       //Init the net_device structure
@@ -1250,6 +1239,65 @@ error_sme_open:
    return status;
 }
 
+#ifdef WLAN_FEATURE_P2P
+/**
+ * hdd_init_p2p_device_mode
+ *
+ *FUNCTION:
+ * This function is called from hdd_wlan_startup function when wlan 
+ * driver module is loaded. 
+ *
+ *LOGIC:
+ * Open New SME session with P2P Device Mac Address which is different 
+ * from STA Mac Address SME session. When driver receive any frame on STA Mac 
+ * Address then we divert all the frame using P2P Device Mac Address instaed of 
+ * STA Mac address. 
+ *
+ *ASSUMPTIONS:
+ *
+ *
+ *NOTE:
+ *
+ * @param  pAdapter   Pointer to pAdapter structure
+ *
+ * @return None
+ */
+VOS_STATUS hdd_init_p2p_device_mode( hdd_adapter_t *pAdapter)
+{
+   hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX( pAdapter );
+   eHalStatus halStatus = eHAL_STATUS_SUCCESS;
+   VOS_STATUS status = VOS_STATUS_E_FAILURE;
+   int rc = 0;
+
+   INIT_COMPLETION(pAdapter->session_open_comp_var);
+   //Open a SME session for future operation
+   halStatus = sme_OpenSession( pHddCtx->hHal, hdd_smeRoamCallback, pAdapter,
+               (tANI_U8 *)&pHddCtx->p2pDeviceAddress, &pAdapter->p2pSessionId);
+   if ( !HAL_STATUS_SUCCESS( halStatus ) )
+   {
+      hddLog(VOS_TRACE_LEVEL_FATAL,
+             "sme_OpenSession() failed with status code %08d [x%08lx]",
+                                                 halStatus, halStatus );
+      status = VOS_STATUS_E_FAILURE;
+      return status;
+   }
+   
+   //Block on a completion variable. Can't wait forever though.
+   rc = wait_for_completion_interruptible_timeout(
+                        &pAdapter->session_open_comp_var,
+                        msecs_to_jiffies(WLAN_WAIT_TIME_SESSIONOPENCLOSE));
+   if (!rc)
+   {
+      hddLog(VOS_TRACE_LEVEL_FATAL,
+             "Session is not opened within timeout period code %08d", rc );
+      status = VOS_STATUS_E_FAILURE;
+      return status;
+   }
+
+   return VOS_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef CONFIG_CFG80211
 void hdd_cleanup_actionframe( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
 {
@@ -1281,7 +1329,6 @@ void hdd_deinit_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
    {
       case WLAN_HDD_INFRA_STATION:
       case WLAN_HDD_P2P_CLIENT:
-      case WLAN_HDD_P2P_DEVICE:
       {
          if(test_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags))
          {
@@ -1381,7 +1428,6 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
       case WLAN_HDD_INFRA_STATION:
 #ifdef WLAN_FEATURE_P2P
       case WLAN_HDD_P2P_CLIENT:
-      case WLAN_HDD_P2P_DEVICE:
 #endif
       {
          pAdapter = hdd_alloc_station_adapter( pHddCtx, macAddr, iface_name );
@@ -1390,9 +1436,9 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
             return NULL;
 
 #ifdef CONFIG_CFG80211
-         pAdapter->wdev.iftype = (session_type == WLAN_HDD_P2P_CLIENT) ?
-                                  NL80211_IFTYPE_P2P_CLIENT:
-                                  NL80211_IFTYPE_STATION ;
+         pAdapter->wdev.iftype = (session_type == WLAN_HDD_INFRA_STATION) ?
+                                  NL80211_IFTYPE_STATION :
+                                  NL80211_IFTYPE_P2P_CLIENT;
 #endif
 
 
@@ -1599,7 +1645,6 @@ VOS_STATUS hdd_close_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
 {
    hdd_adapter_list_node_t *pAdapterNode, *pCurrent, *pNext;
    VOS_STATUS status;
-   eHalStatus hstatus;
 
    status = hdd_get_front_adapter ( pHddCtx, &pCurrent );
    if( VOS_STATUS_SUCCESS != status )
@@ -1649,10 +1694,10 @@ VOS_STATUS hdd_close_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
          }
 
          INIT_COMPLETION(pHddCtx->req_bmps_comp_var);
-         hstatus = sme_RequestBmps(WLAN_HDD_GET_HAL_CTX(pAdapter), 
+         status = sme_RequestBmps(WLAN_HDD_GET_HAL_CTX(pAdapter), 
                       hdd_req_bmps_cbk, &pHddCtx->req_bmps_comp_var);
 
-         if (eHAL_STATUS_PMC_PENDING == hstatus)
+         if (eHAL_STATUS_PMC_PENDING == status)
          {
             wait_for_completion_interruptible_timeout(&pHddCtx->req_bmps_comp_var,
                    msecs_to_jiffies(WLAN_WAIT_TIME_POWER));
@@ -1732,7 +1777,6 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
    {
       case WLAN_HDD_INFRA_STATION:
       case WLAN_HDD_P2P_CLIENT:
-      case WLAN_HDD_P2P_DEVICE:
          if( hdd_connIsConnected( WLAN_HDD_GET_STATION_CTX_PTR( pAdapter )) )
          {
             if (pWextState->roamProfile.BSSType == eCSR_BSS_TYPE_START_IBSS)
@@ -1918,12 +1962,11 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
       {
          case WLAN_HDD_INFRA_STATION:
          case WLAN_HDD_P2P_CLIENT:
-         case WLAN_HDD_P2P_DEVICE:
             hdd_init_station_mode(pAdapter);
             /* Open the gates for HDD to receive Wext commands */
             pAdapter->isLinkUpSvcNeeded = FALSE; 
-            pHddCtx->scan_info.mScanPending = FALSE;
-            pHddCtx->scan_info.waitScanResult = FALSE;
+            pAdapter->scan_info.mScanPending = FALSE;
+            pAdapter->scan_info.waitScanResult = FALSE;
 
             //Trigger the initial scan
             hdd_wlan_initial_scan(pAdapter);
@@ -2022,16 +2065,13 @@ VOS_STATUS hdd_reconnect_all_adapters( hdd_context_t *pHddCtx )
    return VOS_STATUS_SUCCESS;
 }
 
-bool hdd_is_ssr_required( void)
+v_U8_t hdd_is_ssr_required( void)
 {
-    return (isSsrRequired == HDD_SSR_REQUIRED);
+    return isSsrRequired;
 }
 
-/* Once SSR is disabled then it cannot be set. */
-void hdd_set_ssr_required( e_hdd_ssr_required value)
+void hdd_set_ssr_required( v_U8_t value)
 {
-    if (HDD_SSR_DISABLED == isSsrRequired)
-        return;
     isSsrRequired = value;
 }
 
@@ -2449,9 +2489,6 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
 
    ENTER();
 
-   // Unloading, restart logic is no more required.
-   wlan_hdd_restart_deinit(pHddCtx);
-
 #ifdef CONFIG_CFG80211
 #ifdef WLAN_SOFTAP_FEATURE
    if (VOS_STA_SAP_MODE != hdd_get_conparam())
@@ -2589,6 +2626,24 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    // Unregister the Net Device Notifier
    unregister_netdevice_notifier(&hdd_netdev_notifier);
    
+#ifdef WLAN_FEATURE_P2P
+   if (pHddCtx->cfg_ini->isP2pDeviceAddrAdministrated)
+   {
+       hdd_adapter_t* pAdapter = hdd_get_adapter(pHddCtx,
+                                    WLAN_HDD_INFRA_STATION);
+
+       INIT_COMPLETION(pAdapter->session_close_comp_var);
+       if( eHAL_STATUS_SUCCESS == sme_CloseSession( pHddCtx->hHal,
+                                     pAdapter->p2pSessionId,
+                                     hdd_smeCloseSessionCallback, pAdapter ) )
+       {
+           //Block on a completion variable. Can't wait forever though.
+           wait_for_completion_interruptible_timeout(
+                      &pAdapter->session_close_comp_var,
+                      msecs_to_jiffies(WLAN_WAIT_TIME_SESSIONOPENCLOSE));
+       }
+   }
+#endif   
    hdd_stop_all_adapters( pHddCtx );
 
 #ifdef ANI_BUS_TYPE_SDIO
@@ -2948,7 +3003,6 @@ int hdd_wlan_startup(struct device *dev )
 {
    VOS_STATUS status;
    hdd_adapter_t *pAdapter = NULL;
-   hdd_adapter_t *pP2pAdapter = NULL;
    hdd_context_t *pHddCtx = NULL;
    v_CONTEXT_t pVosContext= NULL;
 #ifdef WLAN_BTAMP_FEATURE
@@ -3395,40 +3449,23 @@ int hdd_wlan_startup(struct device *dev )
      if (pAdapter != NULL)
      {
 #ifdef WLAN_FEATURE_P2P
-         if ( pHddCtx->cfg_ini->isP2pDeviceAddrAdministrated )
-         {
-             vos_mem_copy( pHddCtx->p2pDeviceAddress.bytes,
+         vos_mem_copy( pHddCtx->p2pDeviceAddress.bytes, 
                        pHddCtx->cfg_ini->intfMacAddr[0].bytes,
                        sizeof(tSirMacAddr));
+         if ( pHddCtx->cfg_ini->isP2pDeviceAddrAdministrated )
+         {
              /* Generate the P2P Device Address.  This consists of the device's
               * primary MAC address with the locally administered bit set.
               */
              pHddCtx->p2pDeviceAddress.bytes[0] |= 0x02;
-         }
-         else
-         {
-             tANI_U8* p2p_dev_addr = wlan_hdd_get_intf_addr(pHddCtx);
-             if (p2p_dev_addr != NULL)
+             status = hdd_init_p2p_device_mode(pAdapter);
+             if ( VOS_STATUS_SUCCESS != status )
              {
-                vos_mem_copy(&pHddCtx->p2pDeviceAddress.bytes[0],
-                             p2p_dev_addr, VOS_MAC_ADDR_SIZE);
+                 hddLog(VOS_TRACE_LEVEL_FATAL,
+                         "%s: Init Session fail for P2P Device Address Mode ",
+                          __FUNCTION__);
+                 goto err_close_adapter;
              }
-             else
-             {
-                hddLog(VOS_TRACE_LEVEL_FATAL,
-                    "%s: Failed to allocate mac_address for p2p_device",
-                    __FUNCTION__);
-                goto err_close_adapter;
-             }
-         }
-         pP2pAdapter = hdd_open_adapter( pHddCtx, WLAN_HDD_P2P_DEVICE, "p2p%d",
-                           &pHddCtx->p2pDeviceAddress.bytes[0], FALSE );
-         if ( NULL == pP2pAdapter )
-         {
-             hddLog(VOS_TRACE_LEVEL_FATAL,
-                "%s: Failed to do hdd_open_adapter for P2P Device Interface",
-                __FUNCTION__);
-             goto err_close_adapter;
          }
 #endif
     }
@@ -3453,7 +3490,7 @@ int hdd_wlan_startup(struct device *dev )
    {
      VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
         "%s: Failed to open BAP",__func__);
-      goto err_close_adapter;
+      goto err_p2psession_close;
    }
 
    vStatus = BSL_Init(pVosContext);
@@ -3555,7 +3592,7 @@ int hdd_wlan_startup(struct device *dev )
    if (VOS_STA_SAP_MODE != hdd_get_conparam())
 #endif
    {
-      wlan_hdd_cfg80211_post_voss_start(pP2pAdapter);
+      wlan_hdd_cfg80211_post_voss_start(pAdapter);
    }
 #endif
 
@@ -3563,14 +3600,11 @@ int hdd_wlan_startup(struct device *dev )
 
    pHddCtx->isLoadUnloadInProgress = FALSE;
 
-   vos_event_init(&pHddCtx->scan_info.scan_finished_event);
-   pHddCtx->scan_info.scan_pending_option = WEXT_SCAN_PENDING_GIVEUP;
+   vos_event_init(&pAdapter->scan_info.scan_finished_event);
+   pAdapter->scan_info.scan_pending_option = WEXT_SCAN_PENDING_GIVEUP;
 
    vos_set_load_unload_in_progress(VOS_MODULE_ID_VOSS, FALSE);
    hdd_allow_suspend();
-   
-   // Initialize the restart logic
-   wlan_hdd_restart_init(pHddCtx);
   
    goto success;
 
@@ -3587,11 +3621,33 @@ err_unregister_pmops:
    hddDeregisterPmOps(pHddCtx);
 
 err_bap_stop:
-#ifdef WLAN_BTAMP_FEATURE
   WLANBAP_Stop(pVosContext);
 
+#ifdef WLAN_BTAMP_FEATURE
 err_bap_close:
    WLANBAP_Close(pVosContext);
+#endif
+
+#ifdef WLAN_BTAMP_FEATURE
+err_p2psession_close:
+#ifdef WLAN_FEATURE_P2P
+   if (pHddCtx->cfg_ini->isP2pDeviceAddrAdministrated)
+   {
+       hdd_adapter_t* pAdapter = hdd_get_adapter(pHddCtx,
+                                    WLAN_HDD_INFRA_STATION);
+
+       INIT_COMPLETION(pAdapter->session_close_comp_var);
+       if( eHAL_STATUS_SUCCESS == sme_CloseSession( pHddCtx->hHal,
+                                     pAdapter->p2pSessionId,
+                                     hdd_smeCloseSessionCallback, pAdapter ) )
+       {
+           //Block on a completion variable. Can't wait forever though.
+           wait_for_completion_interruptible_timeout(
+                      &pAdapter->session_close_comp_var,
+                      msecs_to_jiffies(WLAN_WAIT_TIME_SESSIONOPENCLOSE));
+       }
+   }
+#endif
 #endif
 
 err_close_adapter:
@@ -3653,14 +3709,6 @@ err_free_hdd_context:
 #else
    vos_mem_free( pHddCtx );
 #endif
-
-   if (hdd_is_ssr_required())
-   {
-       /* WDI timeout had happened during load, so SSR is needed here */
-       subsystem_restart("wcnss");
-       msleep(5000);
-   }
-   hdd_set_ssr_required (VOS_FALSE);
 
    return -1;
 
@@ -3847,9 +3895,9 @@ static int __init hdd_module_init ( void)
        * This is done here for safety purposes in case we re-initialize without turning
        * it OFF in any error scenario.
        */
-      hddLog(VOS_TRACE_LEVEL_INFO, "In module init: Ensure Force XO Core is OFF"
+      hddLog(VOS_TRACE_LEVEL_ERROR, "In module init: Ensure Force XO Core is OFF"
                                        " when  WLAN is turned ON so Core toggles"
-                                       " unless we enter PSD");
+                                       " unless we enter PS\n");
       if (vos_chipVoteXOCore(NULL, NULL, NULL, VOS_FALSE) != VOS_STATUS_SUCCESS)
       {
           hddLog(VOS_TRACE_LEVEL_ERROR, "Could not cancel XO Core ON vote. Not returning failure."
@@ -3905,6 +3953,7 @@ static void __exit hdd_module_exit(void)
 {
    hdd_context_t *pHddCtx = NULL;
    v_CONTEXT_t pVosContext = NULL;
+   int attempts = 0;
 
    pr_info("%s: unloading driver v%s\n", WLAN_MODULE_NAME, QWLAN_VERSIONSTR);
 
@@ -3926,10 +3975,13 @@ static void __exit hdd_module_exit(void)
    }
    else
    {
-      /* module exit should never proceed if SSR is not completed */
       while(isWDresetInProgress()){
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:SSR in Progress; block rmmod for 1 second!!!",__func__);
-         msleep(1000);
+         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:Reset in Progress by LOGP. Block rmmod for 500ms!!!",__func__);
+         VOS_ASSERT(0);
+         msleep(500);
+         attempts++;
+         if(attempts==MAX_EXIT_ATTEMPTS_DURING_LOGP)
+           break;
        }
 
       pHddCtx->isLoadUnloadInProgress = TRUE;
@@ -4180,189 +4232,6 @@ void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode)
    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s: concurrency_mode = 0x%x NumberofSessions for mode %d = %d",
     __func__,pHddCtx->concurrency_mode,mode,pHddCtx->no_of_sessions[mode]);
 }
-
-/**---------------------------------------------------------------------------
- *
- *   \brief wlan_hdd_restart_init
- *
- *   This function initalizes restart timer/flag. An internal function.
- *
- *   \param  - pHddCtx
- *
- *   \return - None
- *             
- * --------------------------------------------------------------------------*/
-
-static void wlan_hdd_restart_init(hdd_context_t *pHddCtx)
-{
-   /* Initialize */
-   pHddCtx->hdd_restart_retries = 0;
-   atomic_set(&pHddCtx->isRestartInProgress, 0);
-   vos_timer_init(&pHddCtx->hdd_restart_timer, 
-                     VOS_TIMER_TYPE_SW, 
-                     wlan_hdd_restart_timer_cb,
-                     pHddCtx);
-}
-/**---------------------------------------------------------------------------
- *
- *   \brief wlan_hdd_restart_deinit
- *
- *   This function cleans up the resources used. An internal function.
- *
- *   \param  - pHddCtx
- *
- *   \return - None
- *             
- * --------------------------------------------------------------------------*/
-
-static void wlan_hdd_restart_deinit(hdd_context_t* pHddCtx)
-{
- 
-   VOS_STATUS vos_status;
-   /* Block any further calls */
-   atomic_set(&pHddCtx->isRestartInProgress, 1);
-   /* Cleanup */
-   vos_status = vos_timer_stop( &pHddCtx->hdd_restart_timer );
-   if (!VOS_IS_STATUS_SUCCESS(vos_status))
-          hddLog(LOGW, FL("Failed to stop HDD restart timer"));
-   vos_status = vos_timer_destroy(&pHddCtx->hdd_restart_timer);
-   if (!VOS_IS_STATUS_SUCCESS(vos_status))
-          hddLog(LOGW, FL("Failed to destroy HDD restart timer"));
-
-}
-
-/**---------------------------------------------------------------------------
- *
- *   \brief wlan_hdd_framework_restart
- *
- *   This function uses a cfg80211 API to start a framework initiated WLAN
- *   driver module unload/load.
- *
- *   Also this API keep retrying (WLAN_HDD_RESTART_RETRY_MAX_CNT).
- *
- *
- *   \param  - pHddCtx
- *
- *   \return - VOS_STATUS_SUCCESS: Success
- *             VOS_STATUS_E_EMPTY: Adapter is Empty
- *             VOS_STATUS_E_NOMEM: No memory
-
- * --------------------------------------------------------------------------*/
-
-static VOS_STATUS wlan_hdd_framework_restart(hdd_context_t *pHddCtx) 
-{
-   VOS_STATUS status = VOS_STATUS_SUCCESS;
-   hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
-   int len = (sizeof (struct ieee80211_mgmt));
-   struct ieee80211_mgmt *mgmt = NULL; 
-   
-   /* Prepare the DEAUTH managment frame with reason code */
-   mgmt =  kzalloc(len, GFP_KERNEL);
-   if(mgmt == NULL) 
-   {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, 
-            "%s: memory allocatoin failed (%d bytes)", __func__, len);
-      return VOS_STATUS_E_NOMEM;
-   }
-   mgmt->u.deauth.reason_code = WLAN_REASON_DISASSOC_LOW_ACK;
-
-   /* Iterate over all adapters/devices */
-   status =  hdd_get_front_adapter ( pHddCtx, &pAdapterNode );
-   do 
-   {
-      if( (status == VOS_STATUS_SUCCESS) && 
-                           pAdapterNode  && 
-                           pAdapterNode->pAdapter)
-      {
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, 
-               "restarting the driver(intf:\'%s\' mode:%d :try %d)",
-               pAdapterNode->pAdapter->dev->name,
-               pAdapterNode->pAdapter->device_mode,
-               pHddCtx->hdd_restart_retries + 1);
-         /* 
-          * CFG80211 event to restart the driver
-          * 
-          * 'cfg80211_send_unprot_deauth' sends a 
-          * NL80211_CMD_UNPROT_DEAUTHENTICATE event to supplicant at any state 
-          * of SME(Linux Kernel) state machine.
-          *
-          * Reason code WLAN_REASON_DISASSOC_LOW_ACK is currently used to restart
-          * the driver.
-          *
-          */
-         
-         cfg80211_send_unprot_deauth(pAdapterNode->pAdapter->dev, (u_int8_t*)mgmt, len );  
-      }
-      status = hdd_get_next_adapter ( pHddCtx, pAdapterNode, &pNext );
-      pAdapterNode = pNext;
-   } while((NULL != pAdapterNode) && (VOS_STATUS_SUCCESS == status));
-
-
-   /* Free the allocated management frame */
-   kfree(mgmt);
-
-   /* Retry until we unload or reach max count */
-   if(++pHddCtx->hdd_restart_retries < WLAN_HDD_RESTART_RETRY_MAX_CNT) 
-      vos_timer_start(&pHddCtx->hdd_restart_timer, WLAN_HDD_RESTART_RETRY_DELAY_MS);
-
-   return status;
-
-}
-/**---------------------------------------------------------------------------
- *
- *   \brief wlan_hdd_restart_timer_cb
- *
- *   Restart timer callback. An internal function.
- *
- *   \param  - User data:
- *
- *   \return - None
- *             
- * --------------------------------------------------------------------------*/
-
-void wlan_hdd_restart_timer_cb(v_PVOID_t usrDataForCallback)
-{
-   hdd_context_t *pHddCtx = usrDataForCallback;
-   wlan_hdd_framework_restart(pHddCtx);
-   return;
-
-}
-
-
-/**---------------------------------------------------------------------------
- *
- *   \brief wlan_hdd_restart_driver
- *
- *   This function sends an event to supplicant to restart the WLAN driver. 
- *   
- *   This function is called from vos_wlanRestart.
- *
- *   \param  - pHddCtx
- *
- *   \return - VOS_STATUS_SUCCESS: Success
- *             VOS_STATUS_E_EMPTY: Adapter is Empty
- *             VOS_STATUS_E_ALREADY: Request already in progress
-
- * --------------------------------------------------------------------------*/
-VOS_STATUS wlan_hdd_restart_driver(hdd_context_t *pHddCtx) 
-{
-   VOS_STATUS status = VOS_STATUS_SUCCESS;
-
-   /* A tight check to make sure reentrancy */
-   if(atomic_xchg(&pHddCtx->isRestartInProgress, 1))
-   {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_WARN, 
-            "%s: WLAN restart is already in progress", __func__);
-
-      return VOS_STATUS_E_ALREADY;
-   }
-
-   /* Restart API */
-   status = wlan_hdd_framework_restart(pHddCtx);
-   
-   return status;
-}
-
 
 //Register the module init/exit functions
 module_init(hdd_module_init);

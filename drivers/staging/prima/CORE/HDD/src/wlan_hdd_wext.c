@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -99,9 +99,6 @@ extern void hdd_suspend_wlan(struct early_suspend *wlan_suspend);
 extern void hdd_resume_wlan(struct early_suspend *wlan_suspend);
 #endif
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-#define MAX_OEM_DATA_RSP_LEN 1024
-#endif
 
 #define HDD_FINISH_ULA_TIME_OUT    800
 
@@ -217,11 +214,6 @@ static const hdd_freq_chan_map_t freq_chan_map[] = { {2412, 1}, {2417, 2},
 #define WAPI_CERT_AKM_SUITE 0x01721400
 #endif
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-/* Private ioctls for setting the measurement configuration */
-#define WLAN_PRIV_SET_OEM_DATA_REQ (SIOCIWFIRSTPRIV + 17)
-#define WLAN_PRIV_GET_OEM_DATA_RSP (SIOCIWFIRSTPRIV + 19)
-#endif
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
 #define WLAN_PRIV_SET_FTIES             (SIOCIWFIRSTPRIV + 20)
@@ -782,7 +774,7 @@ v_U8_t* wlan_hdd_get_vendor_oui_ie_ptr(v_U8_t *oui, v_U8_t oui_size, v_U8_t *ie,
         if(elem_len > left)
         {
             hddLog(VOS_TRACE_LEVEL_FATAL,
-                   FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
+                   "****Invalid IEs eid = %d elem_len=%d left=%d*****\n",
                     eid,elem_len,left);
             return NULL;
         }
@@ -2046,7 +2038,7 @@ static int iw_softap_set_channel_range( struct net_device *dev,
                                         int endChannel,
                                         int band)
 {
-    VOS_STATUS status;
+    eHalStatus status;
     int ret = 0;
     hdd_adapter_t *pHostapdAdapter = (netdev_priv(dev));
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pHostapdAdapter);
@@ -2314,17 +2306,17 @@ static int iw_set_priv(struct net_device *dev,
     }
     else if (strcasecmp(cmd, "scan-active") == 0)
     {
-        pHddCtx->scan_info.scan_mode = eSIR_ACTIVE_SCAN; 
+        pAdapter->scan_info.scan_mode = eSIR_ACTIVE_SCAN; 
         ret = snprintf(cmd, cmd_len, "OK");
     }
     else if (strcasecmp(cmd, "scan-passive") == 0)
     {
-        pHddCtx->scan_info.scan_mode = eSIR_PASSIVE_SCAN;
+        pAdapter->scan_info.scan_mode = eSIR_PASSIVE_SCAN;
         ret = snprintf(cmd, cmd_len, "OK");
     }
     else if( strcasecmp(cmd, "scan-mode") == 0 ) 
     {
-        ret = snprintf(cmd, cmd_len, "ScanMode = %u", pHddCtx->scan_info.scan_mode);
+        ret = snprintf(cmd, cmd_len, "ScanMode = %u", pAdapter->scan_info.scan_mode);
     }
     else if( strcasecmp(cmd, "linkspeed") == 0 ) 
     {
@@ -2562,49 +2554,51 @@ static int iw_set_encode(struct net_device *dev,struct iw_request_info *info,
        if(!fKeyPresent) {
         
           for(i=0;i < CSR_MAX_NUM_KEY; i++) {
-
-             if(pWextState->roamProfile.Keys.KeyMaterial[i])
+         
+             if(pWextState->roamProfile.Keys.KeyMaterial[i])   
                 pWextState->roamProfile.Keys.KeyLength[i] = 0;
           }
        }
-       pHddStaCtx->conn_info.authType =  eCSR_AUTH_TYPE_OPEN_SYSTEM;
-       pWextState->wpaVersion = IW_AUTH_WPA_VERSION_DISABLED;
-       pWextState->roamProfile.EncryptionType.encryptionType[0] = eCSR_ENCRYPT_TYPE_NONE;
+       pHddStaCtx->conn_info.authType =  eCSR_AUTH_TYPE_OPEN_SYSTEM; 
+       pWextState->wpaVersion = IW_AUTH_WPA_VERSION_DISABLED; 
+       pWextState->roamProfile.EncryptionType.encryptionType[0] = eCSR_ENCRYPT_TYPE_NONE; 
        pWextState->roamProfile.mcEncryptionType.encryptionType[0] = eCSR_ENCRYPT_TYPE_NONE;
-
+       
        pHddStaCtx->conn_info.ucEncryptionType = eCSR_ENCRYPT_TYPE_NONE;
-       pHddStaCtx->conn_info.mcEncryptionType = eCSR_ENCRYPT_TYPE_NONE;
-
+       pHddStaCtx->conn_info.mcEncryptionType = eCSR_ENCRYPT_TYPE_NONE; 
+      
        if(eConnectionState_Associated == pHddStaCtx->conn_info.connState)
        {
            INIT_COMPLETION(pAdapter->disconnect_comp_var);
            status = sme_RoamDisconnect( WLAN_HDD_GET_HAL_CTX(pAdapter), pAdapter->sessionId, eCSR_DISCONNECT_REASON_UNSPECIFIED );
-           if(eHAL_STATUS_SUCCESS == status)
+           if(VOS_STATUS_SUCCESS == status)
                  wait_for_completion_interruptible_timeout(&pAdapter->disconnect_comp_var,
                      msecs_to_jiffies(WLAN_WAIT_TIME_DISCONNECT));
        }
+   
        return status;
+   
    }
-
-   if (wrqu->data.flags & (IW_ENCODE_OPEN | IW_ENCODE_RESTRICTED))
+   
+   if (wrqu->data.flags & (IW_ENCODE_OPEN | IW_ENCODE_RESTRICTED)) 
    {
       hddLog(VOS_TRACE_LEVEL_INFO, "iwconfig wlan0 key on");
    
       pHddStaCtx->conn_info.authType = (encoderq->flags & IW_ENCODE_RESTRICTED) ? eCSR_AUTH_TYPE_SHARED_KEY : eCSR_AUTH_TYPE_OPEN_SYSTEM;
    
-   }
+   }   
    
       
    if(wrqu->data.length > 0)
    {
        hddLog(VOS_TRACE_LEVEL_INFO, "%s : wrqu->data.length : %d",__FUNCTION__,wrqu->data.length);
    
-       key_length = wrqu->data.length;
+       key_length = wrqu->data.length;        
    
        /* IW_ENCODING_TOKEN_MAX is the value that is set for wrqu->data.length by iwconfig.c when 'iwconfig wlan0 key on' is issued.*/
       
        if(5 == key_length)
-       {
+       {   
            hddLog(VOS_TRACE_LEVEL_INFO, "%s: Call with WEP40,key_len=%d",__FUNCTION__,key_length);
          
            if((IW_AUTH_KEY_MGMT_802_1X == pWextState->authKeyMgmt) && (eCSR_AUTH_TYPE_OPEN_SYSTEM == pHddStaCtx->conn_info.authType))
@@ -2645,7 +2639,7 @@ static int iw_set_encode(struct net_device *dev,struct iw_request_info *info,
           
        if((eConnectionState_NotConnected == pHddStaCtx->conn_info.connState) && 
             ((eCSR_AUTH_TYPE_OPEN_SYSTEM == pHddStaCtx->conn_info.authType) || 
-              (eCSR_AUTH_TYPE_SHARED_KEY == pHddStaCtx->conn_info.authType)))
+              (eCSR_AUTH_TYPE_SHARED_KEY == pHddStaCtx->conn_info.authType)))                                                                                    
        {
          
           vos_mem_copy(&pWextState->roamProfile.Keys.KeyMaterial[keyId][0],extra,key_length);
@@ -3029,7 +3023,7 @@ static int iw_set_mlme(struct net_device *dev,
                 INIT_COMPLETION(pAdapter->disconnect_comp_var);
                 status = sme_RoamDisconnect( WLAN_HDD_GET_HAL_CTX(pAdapter), pAdapter->sessionId,reason);
                 
-                if(eHAL_STATUS_SUCCESS == status)
+                if(VOS_STATUS_SUCCESS == status)
                     wait_for_completion_interruptible_timeout(&pAdapter->disconnect_comp_var,
                         msecs_to_jiffies(WLAN_WAIT_TIME_DISCONNECT));
                 else
@@ -3469,7 +3463,7 @@ static int iw_setnone_getint(struct net_device *dev, struct iw_request_info *inf
         {
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: sending WLAN_MODULE_DOWN_IND", __FUNCTION__);
             send_btc_nlink_msg(WLAN_MODULE_DOWN_IND, 0);
-#ifdef WLAN_BTAMP_FEATURE
+#ifdef WLAN_BTAMP_FEATURE 
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: Take down AMP PAL", __FUNCTION__);
             BSL_Deinit(vos_get_global_context(VOS_MODULE_ID_HDD, NULL));
 #endif
@@ -3790,8 +3784,6 @@ static int iw_setnone_getnone(struct net_device *dev, struct iw_request_info *in
            break;
         }
 #endif
-
-#ifdef WLAN_BTAMP_FEATURE
         case WE_ENABLE_AMP:
         {
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: enabling AMP", __FUNCTION__);
@@ -3804,7 +3796,6 @@ static int iw_setnone_getnone(struct net_device *dev, struct iw_request_info *in
             WLANBAP_DeregisterFromHCI();
             break;
         }
-#endif
 
         default:
         {
@@ -5084,7 +5075,7 @@ int hdd_setBand_helper(struct net_device *dev, tANI_U8* ptr)
              status = sme_RoamDisconnect( WLAN_HDD_GET_HAL_CTX(pAdapter), 
              pAdapter->sessionId, eCSR_DISCONNECT_REASON_UNSPECIFIED);
 
-             if ( eHAL_STATUS_SUCCESS != status)
+             if ( VOS_STATUS_SUCCESS != status)
              {
                  hddLog(VOS_TRACE_LEVEL_ERROR,
                          "%s csrRoamDisconnect failure, returned %d \n", 
@@ -5247,17 +5238,8 @@ VOS_STATUS iw_set_power_params(struct net_device *dev, struct iw_request_info *i
       return VOS_STATUS_E_FAILURE;
     }
 
-    uTotalSize -= nOffset;
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, 
-              "Power request parameter %d Total size", 
-              uTotalSize);
+    uTotalSize -= nOffset; 
     ptr += nOffset;
-    /* This is added for dynamic Tele LI enable (0xF1) /disable (0xF0)*/
-    if(!(uTotalSize - nOffset) && 
-       (powerRequest.uListenInterval != SIR_NOCHANGE_POWER_VALUE))
-    {
-        uTotalSize = 0;
-    }
 
   }/*Go for as long as we have a valid string*/
 
@@ -5348,10 +5330,6 @@ static const iw_handler we_private[] = {
    [WLAN_PRIV_ADD_TSPEC             - SIOCIWFIRSTPRIV]   = iw_add_tspec,
    [WLAN_PRIV_DEL_TSPEC             - SIOCIWFIRSTPRIV]   = iw_del_tspec,
    [WLAN_PRIV_GET_TSPEC             - SIOCIWFIRSTPRIV]   = iw_get_tspec,
-#ifdef FEATURE_OEM_DATA_SUPPORT
-   [WLAN_PRIV_SET_OEM_DATA_REQ - SIOCIWFIRSTPRIV] = iw_set_oem_data_req, //oem data req Specifc
-   [WLAN_PRIV_GET_OEM_DATA_RSP - SIOCIWFIRSTPRIV] = iw_get_oem_data_rsp, //oem data req Specifc
-#endif
 
 #ifdef FEATURE_WLAN_WAPI
    [WLAN_PRIV_SET_WAPI_MODE             - SIOCIWFIRSTPRIV]  = iw_qcom_set_wapi_mode,
@@ -5579,7 +5557,6 @@ static const struct iw_priv_args we_private_args[] = {
         0,
         0,
         "exitAP" },
-#ifdef WLAN_BTAMP_FEATURE
     {   WE_ENABLE_AMP,
         0,
         0,
@@ -5588,7 +5565,6 @@ static const struct iw_priv_args we_private_args[] = {
         0,
         0,
         "disableAMP" },
-#endif
 
     /* handlers for main ioctl */
     {   WLAN_PRIV_SET_VAR_INT_GET_NONE,
@@ -5620,21 +5596,6 @@ static const struct iw_priv_args we_private_args[] = {
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
         "getTspec" },
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-    /* handlers for main ioctl - OEM DATA */
-    {
-        WLAN_PRIV_SET_OEM_DATA_REQ,
-        IW_PRIV_TYPE_BYTE | sizeof(struct iw_oem_data_req) | IW_PRIV_SIZE_FIXED,
-        0,
-        "set_oem_data_req" },
-
-    /* handlers for main ioctl - OEM DATA */
-    {
-        WLAN_PRIV_GET_OEM_DATA_RSP,
-        0,
-        IW_PRIV_TYPE_BYTE | MAX_OEM_DATA_RSP_LEN,
-        "get_oem_data_rsp" },
-#endif
 
 #ifdef FEATURE_WLAN_WAPI
    /* handlers for main ioctl SET_WAPI_MODE */
@@ -5752,7 +5713,7 @@ int hdd_set_wext(hdd_adapter_t *pAdapter)
 {
     hdd_wext_state_t *pwextBuf;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
-    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+
     pwextBuf = WLAN_HDD_GET_WEXT_STATE_PTR(pAdapter);
    
     // Now configure the roaming profile links. To SSID and bssid.
@@ -5783,7 +5744,7 @@ int hdd_set_wext(hdd_adapter_t *pAdapter)
     pwextBuf->wpaVersion = IW_AUTH_WPA_VERSION_DISABLED;
 
     /*Set the default scan mode*/
-    pHddCtx->scan_info.scan_mode = eSIR_ACTIVE_SCAN;
+    pAdapter->scan_info.scan_mode = eSIR_ACTIVE_SCAN;
 
     hdd_clearRoamProfileIe(pAdapter);
 

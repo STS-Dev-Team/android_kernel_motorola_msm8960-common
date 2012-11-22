@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -757,7 +757,7 @@ wpt_status wpalIsPacketLocked( wpt_packet *pPacket)
    wpt_iterator_info* pInfo;
 
    /* Validate the parameter pointers */
-   if (NULL == pPacket)
+   if (unlikely(NULL == pPacket))
    {
       WPAL_TRACE(eWLAN_MODULE_PAL, eWLAN_PAL_TRACE_LEVEL_ERROR,
                 "%s : NULL input pointer", __FUNCTION__);
@@ -768,5 +768,5 @@ wpt_status wpalIsPacketLocked( wpt_packet *pPacket)
    pInfo  = (wpt_iterator_info*)pPacket->pInternalData;
    return (NULL == pInfo)? eWLAN_PAL_STATUS_E_FAILURE : 
                     eWLAN_PAL_STATUS_SUCCESS;
-}/*wpalIsPacketLocked*/
+}/*wpalUnlockPacket*/
 

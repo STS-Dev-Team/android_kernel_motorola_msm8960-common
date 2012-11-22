@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -551,7 +551,7 @@ __limHandleSmeStartBssRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
         /*Store Persona */
         psessionEntry->pePersona = pSmeStartBssReq->bssPersona;
-        VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,FL("PE PERSONA=%d"),
+        VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,FL("PE PERSONA=%d\n"),
             psessionEntry->pePersona);
 
         psessionEntry->maxTxPower = cfgGetRegulatoryMaxTransmitPower( pMac, 
@@ -586,17 +586,7 @@ __limHandleSmeStartBssRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                  }
                  else
                  {
-                     /* To detect PBC overlap in SAP WPS mode, Host handles
-                      * Probe Requests.
-                      */
-                     if (SAP_WPS_DISABLED == pSmeStartBssReq->wps_state)
-		     {
-		          psessionEntry->proxyProbeRspEn = 1;
-		     }
-		     else
-		     {
-		          psessionEntry->proxyProbeRspEn = 0;
-		     }
+                     psessionEntry->proxyProbeRspEn = 1;
                  }
                  psessionEntry->ssidHidden = pSmeStartBssReq->ssidHidden;
                  psessionEntry->wps_state = pSmeStartBssReq->wps_state;
@@ -1085,9 +1075,9 @@ __limProcessSmeScanReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
         /* De-activate Heartbeat timers for connected sessions while scan is in progress */
         for(i=0;i<pMac->lim.maxBssId;i++)
         {
-           if((peFindSessionBySessionId(pMac,i) != NULL) &&
-                    (pMac->lim.gpSession[i].valid == TRUE) &&
-                    (eLIM_MLM_LINK_ESTABLISHED_STATE == pMac->lim.gpSession[i].limMlmState))
+           if(pMac->lim.gpSession[i].valid == FALSE)
+               break;
+           if(pMac->lim.gpSession[i].limMlmState == eLIM_MLM_LINK_ESTABLISHED_STATE)
            {
                limHeartBeatDeactivateAndChangeTimer(pMac, peFindSessionBySessionId(pMac,i));
            }   
@@ -1237,36 +1227,6 @@ __limProcessSmeScanReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
 } /*** end __limProcessSmeScanReq() ***/
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-
-static void __limProcessSmeOemDataReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
-{
-    tpSirOemDataReq    pOemDataReq;
-    tLimMlmOemDataReq* pMlmOemDataReq;
-
-    pOemDataReq = (tpSirOemDataReq) pMsgBuf; 
-
-    //post the lim mlm message now
-    if(eHAL_STATUS_SUCCESS != palAllocateMemory(pMac->hHdd, (void**)&pMlmOemDataReq, (sizeof(tLimMlmOemDataReq))))
-    {
-        limLog(pMac, LOGP, FL("palAllocateMemory failed for mlmOemDataReq\n"));
-        return;
-    }
-
-    //Initialize this buffer
-    palZeroMemory(pMac->hHdd, pMlmOemDataReq, (sizeof(tLimMlmOemDataReq)));
-
-    palCopyMemory(pMac->hHdd, pMlmOemDataReq->selfMacAddr, pOemDataReq->selfMacAddr, sizeof(tSirMacAddr)); 
-    palCopyMemory(pMac->hHdd, pMlmOemDataReq->oemDataReq, pOemDataReq->oemDataReq, OEM_DATA_REQ_SIZE);
-
-    //Issue LIM_MLM_OEM_DATA_REQ to MLM
-    limPostMlmMessage(pMac, LIM_MLM_OEM_DATA_REQ, (tANI_U32*)pMlmOemDataReq);
-
-    return;
-
-} /*** end __limProcessSmeOemDataReq() ***/
-
-#endif //FEATURE_OEM_DATA_SUPPORT
 
 
 /**
@@ -2158,7 +2118,6 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     tANI_U16                disassocTrigger, reasonCode;
     tLimMlmDisassocReq      *pMlmDisassocReq;
     tSirResultCodes         retCode = eSIR_SME_SUCCESS;
-    tSirRetStatus           status;
     tSirSmeDisassocReq      smeDisassocReq;
     tpPESession             psessionEntry = NULL; 
     tANI_U8                 sessionId;
@@ -2167,18 +2126,17 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
     PELOG1(limLog(pMac, LOG1,FL("received DISASSOC_REQ message\n"));)
     
-    if (pMsgBuf == NULL)
+    if(pMsgBuf == NULL)
     {
-        limLog(pMac, LOGE, FL("Buffer is Pointing to NULL\n"));
+        limLog(pMac, LOGE,FL("Buffer is Pointing to NULL\n"));
         return;
     }
 
-    limGetSessionInfo(pMac, (tANI_U8 *)pMsgBuf,&smesessionId, &smetransactionId);
+    limGetSessionInfo(pMac,(tANI_U8 *)pMsgBuf,&smesessionId,&smetransactionId);
 
-    status = limDisassocReqSerDes(pMac, &smeDisassocReq, (tANI_U8 *) pMsgBuf);
+    retCode = limDisassocReqSerDes(pMac, &smeDisassocReq, (tANI_U8 *) pMsgBuf);
     
-    if ( (eSIR_FAILURE == status) ||
-         (!limIsSmeDisassocReqValid(pMac, &smeDisassocReq, psessionEntry)) )
+    if ( (retCode == eSIR_FAILURE) ||(!limIsSmeDisassocReqValid(pMac, &smeDisassocReq, psessionEntry)) )
     {
         PELOGE(limLog(pMac, LOGE,
                FL("received invalid SME_DISASSOC_REQ message\n"));)
@@ -2196,8 +2154,9 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     }
 
 
-    PELOG1(limLog(pMac, LOG1,   FL("received DISASSOC_REQ message. Reason: %d global SmeState: %d"),
+    PELOGE(limLog(pMac, LOGE,   FL("received DISASSOC_REQ message. Reason: %d SmeState: %d\n"), 
                                                         smeDisassocReq.reasonCode, pMac->lim.gLimSmeState);)
+
 
     if((psessionEntry = peFindSessionByBssid(pMac,smeDisassocReq.bssId,&sessionId))== NULL)
     {
@@ -2205,13 +2164,13 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
         retCode = eSIR_SME_INVALID_PARAMETERS;
         disassocTrigger = eLIM_HOST_DISASSOC;
         goto sendDisassoc;
-
+        
     }
 
-#ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
+#ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT 
    limDiagEventReport(pMac, WLAN_PE_DIAG_DISASSOC_REQ_EVENT, psessionEntry, 0, smeDisassocReq.reasonCode);
 #endif //FEATURE_WLAN_DIAG_SUPPORT
-
+    
     /* Update SME session Id and SME transaction ID*/
 
     psessionEntry->smeSessionId = smesessionId;
@@ -2239,19 +2198,6 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                     psessionEntry->limSmeState= eLIM_SME_WT_DISASSOC_STATE;
                     MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, 0, pMac->lim.gLimSmeState));
                     limLog(pMac, LOG1, FL("Rcvd SME_DISASSOC_REQ while in SME_WT_DEAUTH_STATE. \n"));
-                    break;
-
-                case eLIM_SME_WT_DISASSOC_STATE:
-                    /* PE Recieved a Disassoc frame. Normally it gets DISASSOC_CNF but it
-                     * received DISASSOC_REQ. Which means host is also trying to disconnect.
-                     * PE can continue processing DISASSOC_REQ and send the response instead
-                     * of failing the request. SME will anyway ignore DEAUTH_IND that was sent
-                     * for disassoc frame.
-                     *
-                     * It will send a disassoc, which is ok. However, we can use the global flag
-                     * sendDisassoc to not send disassoc frame.
-                     */
-                    limLog(pMac, LOG1, FL("Rcvd SME_DISASSOC_REQ while in SME_WT_DISASSOC_STATE. \n"));
                     break;
 
                 case eLIM_SME_JOIN_FAILURE_STATE: {
@@ -4368,7 +4314,6 @@ __limProcessSmeStatsRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     if((psessionEntry = peFindSessionByBssid(pMac,pStatsReq->bssId,&sessionId))== NULL)
     {
         limLog(pMac, LOGE, FL("session does not exist for given bssId\n"));
-        palFreeMemory( pMac, pMsgBuf );
         return;
     }
 
@@ -4414,7 +4359,6 @@ __limProcessSmeStatsRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
     if( eSIR_SUCCESS != (wdaPostCtrlMsg( pMac, &msgQ ))){
         limLog(pMac, LOGP, "Unable to forward request\n");
-        palFreeMemory( pMac, pMsgBuf );
         return;
     }
 
@@ -4728,57 +4672,11 @@ __limProcessSmeRegisterMgmtFrameReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     VOS_STATUS vosStatus;
     tpSirRegisterMgmtFrame pSmeReq = (tpSirRegisterMgmtFrame)pMsgBuf;
     tpLimMgmtFrameRegistration pLimMgmtRegistration = NULL, pNext = NULL;
-    tANI_BOOLEAN match = VOS_FALSE;
+
     PELOG1(limLog(pMac, LOG1, 
            FL("%s: registerFrame %d, frameType %d, matchLen %d\n", 
            __func__, pSmeReq->registerFrame, pSmeReq->frameType, 
        pSmeReq->matchLen)));
-
-    /* First check whether entry exists already*/
-
-    vos_list_peek_front(&pMac->lim.gLimMgmtFrameRegistratinQueue,
-            (vos_list_node_t**)&pLimMgmtRegistration);
-
-    while(pLimMgmtRegistration != NULL)
-    {
-        if (pLimMgmtRegistration->frameType == pSmeReq->frameType)
-        {
-            if(pSmeReq->matchLen)
-            {
-                if (pLimMgmtRegistration->matchLen == pSmeReq->matchLen)
-                {
-                    if (palEqualMemory(pMac, pLimMgmtRegistration->matchData, 
-                                pSmeReq->matchData, pLimMgmtRegistration->matchLen))
-                    {
-                        /* found match! */   
-                        match = VOS_TRUE;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                /* found match! */   
-                match = VOS_TRUE;
-                break;
-            }
-        }
-        vosStatus = vos_list_peek_next (
-                &pMac->lim.gLimMgmtFrameRegistratinQueue,
-                (vos_list_node_t*) pLimMgmtRegistration,
-                (vos_list_node_t**) &pNext );
-
-        pLimMgmtRegistration = pNext;
-        pNext = NULL; 
-
-    }
-
-    if (match)
-    {
-        vos_list_remove_node(&pMac->lim.gLimMgmtFrameRegistratinQueue,
-                (vos_list_node_t*)pLimMgmtRegistration);
-        palFreeMemory(pMac,pLimMgmtRegistration);
-    }
 
     if(pSmeReq->registerFrame)
     {
@@ -4799,6 +4697,54 @@ __limProcessSmeRegisterMgmtFrameReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
      
             vos_list_insert_front(&pMac->lim.gLimMgmtFrameRegistratinQueue,
                               &pLimMgmtRegistration->node);
+        }
+    }
+    else
+    {
+        tANI_BOOLEAN match = VOS_FALSE;
+
+        vos_list_peek_front(&pMac->lim.gLimMgmtFrameRegistratinQueue,
+                   (vos_list_node_t**)&pLimMgmtRegistration);
+
+        while(pLimMgmtRegistration != NULL)
+        {
+            if (pLimMgmtRegistration->frameType == pSmeReq->frameType)
+            {
+                if(pSmeReq->matchLen)
+                {
+                    if (pLimMgmtRegistration->matchLen == pSmeReq->matchLen)
+                    {
+                        if (palEqualMemory(pMac, pLimMgmtRegistration->matchData, 
+                          pSmeReq->matchData, pLimMgmtRegistration->matchLen))
+                        {
+                            /* found match! */   
+                            match = VOS_TRUE;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    /* found match! */   
+                    match = VOS_TRUE;
+                    break;
+                }
+            }
+            vosStatus = vos_list_peek_next (
+                                 &pMac->lim.gLimMgmtFrameRegistratinQueue,
+                                   (vos_list_node_t*) pLimMgmtRegistration,
+                                 (vos_list_node_t**) &pNext );
+
+            pLimMgmtRegistration = pNext;
+            pNext = NULL; 
+
+        }
+
+        if (match)
+        {
+            vos_list_remove_node(&pMac->lim.gLimMgmtFrameRegistratinQueue,
+                                (vos_list_node_t*)pLimMgmtRegistration);
+            palFreeMemory(pMac,pLimMgmtRegistration);
         }
     }
 
@@ -4859,12 +4805,6 @@ limProcessSmeReqMessages(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
 
             break;
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-        case eWNI_SME_OEM_DATA_REQ:
-            __limProcessSmeOemDataReq(pMac, pMsgBuf);
-
-            break;
-#endif
 #ifdef WLAN_FEATURE_P2P
         case eWNI_SME_REMAIN_ON_CHANNEL_REQ:
             bufConsumed = limProcessRemainOnChnlReq(pMac, pMsgBuf);

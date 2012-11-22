@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -894,7 +894,7 @@ typedef struct tagCsrRoamStruct
         (CSR_IS_OPEARTING_DUAL_BAND((pMac)) || CSR_IS_RADIO_BG_ONLY((pMac)) || CSR_IS_24_BAND_ONLY((pMac)))
 
 #define CSR_IS_CHANNEL_5GHZ(chnNum) \
-        (((chnNum) >= CSR_MIN_5GHz_CHANNEL_NUMBER) && ((chnNum) <= CSR_MAX_5GHz_CHANNEL_NUMBER))
+        ((chnNum) > CSR_MAX_24GHz_CHANNEL_NUMBER)
 
 #define CSR_IS_CHANNEL_24GHZ(chnNum) \
         (((chnNum) > 0) && ((chnNum) <= CSR_MAX_24GHz_CHANNEL_NUMBER))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -266,13 +266,6 @@ typedef struct hdd_wext_state_s
    /**Completion Variable*/
    struct completion completion_var;
 
-#ifdef FEATURE_OEM_DATA_SUPPORT
-   /* oem data req in Progress */
-   v_BOOL_t oemDataReqInProgress;
-
-   /* oem data req ID */
-   v_U32_t oemDataReqID;
-#endif
 }hdd_wext_state_t;
 
 typedef struct ccp_freq_chan_map_s{

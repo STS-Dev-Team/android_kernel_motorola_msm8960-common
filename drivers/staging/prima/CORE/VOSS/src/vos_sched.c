@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2051,10 +2051,7 @@ VOS_STATUS vos_watchdog_wlan_shutdown(void)
         VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                 "%s: Load/unload in Progress. Ignoring signaling Watchdog",
                 __FUNCTION__);
-        /* wcnss has crashed, and SSR has alredy been started by Kernel driver.
-	 * So disable SSR from WLAN driver */
-	 hdd_set_ssr_required( HDD_SSR_DISABLED );
-         return VOS_STATUS_E_FAILURE;
+        return VOS_STATUS_E_FAILURE;
     }
     /* Update Riva Reset Statistics */
     pHddCtx->hddRivaResetStats++;
