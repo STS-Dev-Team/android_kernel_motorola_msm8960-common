@@ -1134,7 +1134,6 @@ typedef struct
  @see
  @return pointer to the context 
 */
-//fixbuild WPT_INLINE void* WDI_GET_PAL_CTX( void );
 void* WDI_GET_PAL_CTX( void );
 
 /*---------------------------------------------------------------------------

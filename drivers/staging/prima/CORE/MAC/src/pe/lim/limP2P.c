@@ -892,15 +892,20 @@ void limSendP2PActionFrame(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
      */
     txFlag |= HAL_USE_BD_RATE2_FOR_MANAGEMENT_FRAME;
 
-    if (SIR_MAC_MGMT_PROBE_RSP == pFc->subType)
+    if ( (SIR_MAC_MGMT_PROBE_RSP == pFc->subType) ||
+         (pMbMsg->noack)
+        )
     {
         halstatus = halTxFrame( pMac, pPacket, (tANI_U16)nBytes,
                         HAL_TXRX_FRM_802_11_MGMT, ANI_TXDIR_TODS,
                         7,/*SMAC_SWBD_TX_TID_MGMT_HIGH */ limTxComplete, pFrame,
                         txFlag );
 
-        limSendSmeRsp(pMac, eWNI_SME_ACTION_FRAME_SEND_CNF, 
+        if (!pMbMsg->noack)
+        {
+           limSendSmeRsp(pMac, eWNI_SME_ACTION_FRAME_SEND_CNF, 
                halstatus, pMbMsg->sessionId, 0);
+        }
         pMac->lim.actionFrameSessionId = 0xff;
     }
     else
