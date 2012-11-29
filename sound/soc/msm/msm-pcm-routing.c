@@ -1512,6 +1512,7 @@ static int msm_pcm_routing_prepare(struct snd_pcm_substream *substream)
 		return -EINVAL;
 	}
 
+
 	bedai = &msm_bedais[be_id];
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
@@ -1533,6 +1534,7 @@ static int msm_pcm_routing_prepare(struct snd_pcm_substream *substream)
 	 * is started.
 	 */
 	bedai->active = 1;
+
 	for_each_set_bit(i, &bedai->fe_sessions, MSM_FRONTEND_DAI_MM_SIZE) {
 		if (fe_dai_map[i][session_type] != INVALID_SESSION) {
 
