@@ -23,6 +23,14 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/input/pmic8xxx-pwrkey.h>
 
+/* define to enable reboot on very long key hold */
+#define VERY_LONG_HOLD_REBOOT
+
+#ifdef VERY_LONG_HOLD_REBOOT
+#include <mach/system.h>
+#include <linux/mfd/pm8xxx/misc.h>
+#endif
+
 #ifdef CONFIG_PM_DEEPSLEEP
 #include <linux/suspend.h>
 #include <linux/wakelock.h>
@@ -46,6 +54,9 @@ struct pmic8xxx_pwrkey {
 	int expired;
 	struct wake_lock wake_lock;
 #endif
+#ifdef VERY_LONG_HOLD_REBOOT
+	struct hrtimer very_longPress_timer;
+#endif
 };
 
 #ifdef CONFIG_PM_DEEPSLEEP
@@ -64,9 +75,32 @@ static enum hrtimer_restart longPress_timer_callback(struct hrtimer *timer)
 }
 #endif
 
+#ifdef VERY_LONG_HOLD_REBOOT
+static enum hrtimer_restart very_longPress_timer_callback(struct hrtimer *timer)
+{
+	arch_reset(0, 0);
+
+	while (1) {
+		printk(KERN_ERR "power key pressed IRQ HANDLER (SHUTTING DOWN - forcing reboot)\n");
+	}
+
+	return HRTIMER_NORESTART;
+}
+#endif
+
 static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
+#ifdef VERY_LONG_HOLD_REBOOT
+	struct timespec uptime;
+
+	do_posix_clock_monotonic_gettime(&uptime);
+
+	if (uptime.tv_sec > 50)	{
+		hrtimer_start(&pwrkey->very_longPress_timer,
+				ktime_set(7, 0), HRTIMER_MODE_REL);
+	}
+#endif
 
 #ifdef CONFIG_PM_DEEPSLEEP
 
@@ -89,8 +123,11 @@ static irqreturn_t pwrkey_release_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
 
-#ifdef CONFIG_PM_DEEPSLEEP
+#ifdef VERY_LONG_HOLD_REBOOT
+	hrtimer_cancel(&pwrkey->very_longPress_timer);
+#endif
 
+#ifdef CONFIG_PM_DEEPSLEEP
 	if (get_deepsleep_mode()) {
 		hrtimer_cancel(&pwrkey->longPress_timer);
 		if (pwrkey->expired == 1) {
@@ -226,6 +263,16 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 
 		goto free_press_irq;
 	}
+
+#ifdef VERY_LONG_HOLD_REBOOT
+	hrtimer_init(&(pwrkey->very_longPress_timer),
+			CLOCK_MONOTONIC,
+			HRTIMER_MODE_REL);
+
+	(pwrkey->very_longPress_timer).function =
+		very_longPress_timer_callback;
+#endif
+
 #ifdef CONFIG_PM_DEEPSLEEP
 
 	hrtimer_init(&(pwrkey->longPress_timer),
