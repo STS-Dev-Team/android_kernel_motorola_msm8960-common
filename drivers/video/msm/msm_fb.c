@@ -564,7 +564,6 @@ static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 	if ((!mfd) || (mfd->key != MFD_KEY))
 		return 0;
 
-	lock_panel_mutex(mfd);
 	if (mfd->msmfb_no_update_notify_timer.function)
 		del_timer(&mfd->msmfb_no_update_notify_timer);
 	complete(&mfd->msmfb_no_update_notify);
@@ -583,7 +582,7 @@ static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 		if (ret) {
 			MSM_FB_INFO
 			    ("msm_fb_suspend: can't turn off display!\n");
-			goto end;
+			return ret;
 		}
 		mfd->op_enable = FALSE;
 	}
@@ -610,9 +609,6 @@ static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 		}
 	}
 
-	ret = 0;
-end:
-	unlock_panel_mutex(mfd);
 	return 0;
 }
 
@@ -624,8 +620,6 @@ static int msm_fb_resume_sub(struct msm_fb_data_type *mfd)
 
 	if ((!mfd) || (mfd->key != MFD_KEY))
 		return 0;
-
-	lock_panel_mutex(mfd);
 
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
@@ -647,8 +641,6 @@ static int msm_fb_resume_sub(struct msm_fb_data_type *mfd)
 		if (ret)
 			MSM_FB_INFO("msm_fb_resume: can't turn on display!\n");
 	}
-
-	unlock_panel_mutex(mfd);
 
 	return ret;
 }
@@ -701,6 +693,7 @@ static int msm_fb_runtime_idle(struct device *dev)
 	return 0;
 }
 
+#if (defined(CONFIG_SUSPEND) && defined(CONFIG_FB_MSM_HDMI_MSM_PANEL))
 static int msm_fb_ext_suspend(struct device *dev)
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(dev);
@@ -755,13 +748,16 @@ static int msm_fb_ext_resume(struct device *dev)
 	mutex_unlock(&mfd->entry_mutex);
 	return ret;
 }
+#endif
 
 static struct dev_pm_ops msm_fb_dev_pm_ops = {
 	.runtime_suspend = msm_fb_runtime_suspend,
 	.runtime_resume = msm_fb_runtime_resume,
 	.runtime_idle = msm_fb_runtime_idle,
+#if (defined(CONFIG_SUSPEND) && defined(CONFIG_FB_MSM_HDMI_MSM_PANEL))
 	.suspend = msm_fb_ext_suspend,
 	.resume = msm_fb_ext_resume,
+#endif
 };
 
 static struct platform_driver msm_fb_driver = {
@@ -873,8 +869,6 @@ void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl)
 
 	if (!mfd->panel_power_on || !bl_updated) {
 		unset_bl_level = bkl_lvl;
-		pr_debug("%s: panel_power_on=%d, bl_update=%d, not changing\n",
-			__func__, mfd->panel_power_on, bl_updated);
 		return;
 	} else {
 		unset_bl_level = -1;
@@ -1452,6 +1446,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fbi->fbops = &msm_fb_ops;
 	fbi->flags = FBINFO_FLAG_DEFAULT;
 	fbi->pseudo_palette = msm_fb_pseudo_palette;
+
 	mfd->ref_cnt = 0;
 	mfd->sw_currently_refreshing = FALSE;
 	mfd->sw_refreshing_enable = TRUE;
@@ -1694,8 +1689,8 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 
 static int msm_fb_open(struct fb_info *info, int user)
 {
-	int result;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	int result;
 
 	mutex_lock(&mfd->entry_mutex);
 	result = pm_runtime_get_sync(info->dev);
@@ -1733,8 +1728,8 @@ msm_fb_open_exit:
 
 static int msm_fb_release(struct fb_info *info, int user)
 {
-	int ret = 0;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	int ret = 0;
 
 	mutex_lock(&mfd->entry_mutex);
 	if (!mfd->ref_cnt) {
@@ -2197,36 +2192,7 @@ static int msm_fb_set_par(struct fb_info *info)
 		mfd->var_yres = var->yres;
 		mfd->var_pixclock = var->pixclock;
 		blank = 1;
-#ifdef MSM_FB_US_DVI_SUPPORT
-		mfd->var_vmode = var->vmode;
-#endif
 	}
-
-#ifdef MSM_FB_US_DVI_SUPPORT
-	if (mfd->hw_refresh && (var->reserved[3] == 99) &&
-	    ((mfd->var_left_margin != var->left_margin) ||
-	     (mfd->var_right_margin != var->right_margin) ||
-	     (mfd->var_upper_margin != var->upper_margin) ||
-	     (mfd->var_lower_margin != var->lower_margin) ||
-	     (mfd->var_hsync_len != var->hsync_len) ||
-	     (mfd->var_vsync_len != var->vsync_len) ||
-	     (mfd->var_sync != var->sync) ||
-	     (mfd->var_vmode != var->vmode))) {
-		mfd->var_xres = var->xres;
-		mfd->var_yres = var->yres;
-		mfd->var_pixclock = var->pixclock;
-		mfd->var_left_margin = var->left_margin;
-		mfd->var_right_margin = var->right_margin;
-		mfd->var_upper_margin = var->upper_margin;
-		mfd->var_lower_margin = var->lower_margin;
-		mfd->var_hsync_len = var->hsync_len;
-		mfd->var_vsync_len = var->vsync_len;
-		mfd->var_sync = var->sync;
-		mfd->var_vmode = var->vmode;
-		blank = 1;
-	}
-#endif
-
 	mfd->fbi->fix.line_length = msm_fb_line_length(mfd->index, var->xres,
 						       var->bits_per_pixel/8);
 
@@ -4132,7 +4098,6 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 
 	default:
-
 		MSM_FB_INFO("MDP: unknown ioctl (cmd=%x) received!\n", cmd);
 		ret = -EINVAL;
 		break;
