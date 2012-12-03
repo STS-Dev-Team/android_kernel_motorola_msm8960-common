@@ -294,6 +294,7 @@ void machine_power_off(void)
 
 void machine_restart(char *cmd)
 {
+	local_irq_disable();
 	machine_shutdown();
 	arm_pm_restart(reboot_mode, cmd);
 }
@@ -344,7 +345,13 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 	}
 }
 
-static void show_extra_register_data(struct pt_regs *regs, int nbytes)
+void show_process_mem(unsigned long addr, int nbtyes, const char *name)
+{
+	show_data(addr, nbtyes, name);
+}
+
+
+static void __show_extra_register_data(struct pt_regs *regs, int nbytes)
 {
 	mm_segment_t fs;
 
@@ -367,6 +374,28 @@ static void show_extra_register_data(struct pt_regs *regs, int nbytes)
 	show_data(regs->ARM_r9 - nbytes, nbytes * 2, "R9");
 	show_data(regs->ARM_r10 - nbytes, nbytes * 2, "R10");
 	set_fs(fs);
+}
+static void show_extra_register_data(struct pt_regs *regs, int nbytes)
+{
+	printk(KERN_DEBUG"\n Before flush cache...\n");
+
+	__show_extra_register_data(regs, nbytes);
+
+	printk(KERN_DEBUG"\n After flush cache... \n");
+
+	/* Clean and invalidate caches */
+	flush_cache_all();
+
+	/* Turn off caching */
+	cpu_proc_fin();
+
+	/* Push out any further dirty data, and ensure cache is empty */
+	flush_cache_all();
+
+	/*Push out the dirty data from external caches */
+	outer_disable();
+
+	__show_extra_register_data(regs, nbytes);
 }
 
 void __show_regs(struct pt_regs *regs)

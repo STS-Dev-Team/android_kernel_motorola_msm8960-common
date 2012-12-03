@@ -534,7 +534,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	ram_console_enable_console(0);
 
 	log_buf_clear();
-	show_state_filter(0);
+	show_state_filter(0, SHOW_KTHREADS | SHOW_APP_THREADS);
 	threads_len = apanic_write_console(ctx->mtd, threads_offset);
 	if (threads_len < 0) {
 		printk(KERN_EMERG "Error writing threads to panic log! (%d)\n",

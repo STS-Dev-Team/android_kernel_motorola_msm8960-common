@@ -889,6 +889,16 @@ config WCD9310_CODEC
           read/write capability to registers which are part of the
           WCD9310 core and gives the ability to use the WCD9310 codec.
 
+config EMU_DETECTION
+	bool "Support for EMU accessory detection on Qualcomm MSM8960"
+	depends on MACH_MSM8960_MMI
+	select HWMON
+	select SENSORS_PM8XXX_ADC
+	default n
+	help
+	  This driver implements EMU accessory detection on Qualcomm
+	  MSM8960 platform with PM8921 PMIC chip.
+
 endif # MFD_SUPPORT
 
 menu "Multimedia Capabilities Port drivers"

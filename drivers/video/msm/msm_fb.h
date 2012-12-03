@@ -47,6 +47,8 @@
 #include "msm_fb_panel.h"
 #include "mdp.h"
 
+#define MSM_FB_US_DVI_SUPPORT /* User Space DVI Support */
+
 #define MSM_FB_DEFAULT_PAGE_SIZE 2
 #define MFD_KEY  0x11161126
 #define MSM_FB_MAX_DEV_LIST 32
@@ -132,6 +134,9 @@ struct msm_fb_data_type {
 			      struct fb_cmap *cmap);
 	int (*do_histogram) (struct fb_info *info,
 			      struct mdp_histogram_data *hist);
+	int (*reg_read)(struct msm_fb_data_type *mfd, __u16 address, __u16 size,
+					__u8 *buf, __u8 use_hs_mode);
+	int (*reg_write)(struct msm_fb_data_type *mfd, __u16 size, __u8 *buf, __u8 use_hs_mode);
 	void *cursor_buf;
 	void *cursor_buf_phys;
 
@@ -146,6 +151,17 @@ struct msm_fb_data_type {
 	__u32 var_xres;
 	__u32 var_yres;
 	__u32 var_pixclock;
+
+#ifdef MSM_FB_US_DVI_SUPPORT
+	__u32 var_left_margin;		/* time from sync to picture	*/
+	__u32 var_right_margin;		/* time from picture to sync	*/
+	__u32 var_upper_margin;		/* time from sync to picture	*/
+	__u32 var_lower_margin;
+	__u32 var_hsync_len;		/* length of horizontal sync	*/
+	__u32 var_vsync_len;		/* length of vertical sync	*/
+	__u32 var_sync;			/* see FB_SYNC_*		*/
+	__u32 var_vmode;		/* see FB_VMODE_*		*/
+#endif
 
 #ifdef MSM_FB_ENABLE_DBGFS
 	struct dentry *sub_dir;

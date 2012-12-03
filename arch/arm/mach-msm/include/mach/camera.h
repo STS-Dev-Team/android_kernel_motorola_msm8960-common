@@ -199,12 +199,14 @@ struct msm_camera_csi2_params {
 	struct msm_camera_csiphy_params csiphy_params;
 };
 
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #define VFE31_OUTPUT_MODE_PT (0x1 << 0)
 #define VFE31_OUTPUT_MODE_S (0x1 << 1)
 #define VFE31_OUTPUT_MODE_V (0x1 << 2)
 #define VFE31_OUTPUT_MODE_P (0x1 << 3)
 #define VFE31_OUTPUT_MODE_T (0x1 << 4)
 #define VFE31_OUTPUT_MODE_P_ALL_CHNLS (0x1 << 5)
+#endif
 
 #define CSI_EMBED_DATA 0x12
 #define CSI_YUV422_8  0x1E
@@ -215,7 +217,6 @@ struct msm_camera_csi2_params {
 #define CSI_DECODE_6BIT 0
 #define CSI_DECODE_8BIT 1
 #define CSI_DECODE_10BIT 2
-#define CSI_DECODE_DPCM_10_8_10 5
 
 struct msm_vfe_phy_info {
 	uint32_t sbuf_phy;
@@ -452,6 +453,8 @@ struct msm_sync {
 	spinlock_t abort_pict_lock;
 	int snap_count;
 	int thumb_count;
+
+	uint32_t focus_state;
 };
 
 #define MSM_APPS_ID_V4L2 "msm_v4l2"
@@ -692,15 +695,12 @@ void msm_isp_sync_free(void *ptr);
 
 int msm_cam_clk_enable(struct device *dev, struct msm_cam_clk_info *clk_info,
 		struct clk **clk_ptr, int num_clk, int enable);
+int msm_sensor_probe_on(struct device *);
+int msm_sensor_probe_off(struct device *);
 int msm_cam_core_reset(void);
 
 int msm_camera_config_vreg(struct device *dev, struct camera_vreg_t *cam_vreg,
 		int num_vreg, struct regulator **reg_ptr, int config);
 int msm_camera_enable_vreg(struct device *dev, struct camera_vreg_t *cam_vreg,
 		int num_vreg, struct regulator **reg_ptr, int enable);
-
-int msm_camera_config_gpio_table
-	(struct msm_camera_sensor_info *sinfo, int gpio_en);
-int msm_camera_request_gpio_table
-	(struct msm_camera_sensor_info *sinfo, int gpio_en);
 #endif

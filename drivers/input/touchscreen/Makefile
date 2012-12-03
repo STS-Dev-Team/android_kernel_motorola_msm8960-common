@@ -6,6 +6,8 @@
 
 wm97xx-ts-y := wm97xx-core.o
 
+obj-$(CONFIG_TOUCHSCREEN_CYTTSP3)	+= cyttsp3_core.o
+obj-$(CONFIG_TOUCHSCREEN_CYTTSP3)	+= cyttsp3_i2c.o
 obj-$(CONFIG_TOUCHSCREEN_88PM860X)	+= 88pm860x-ts.o
 obj-$(CONFIG_TOUCHSCREEN_AD7877)	+= ad7877.o
 obj-$(CONFIG_TOUCHSCREEN_AD7879)	+= ad7879.o
@@ -69,3 +71,5 @@ obj-$(CONFIG_TOUCHSCREEN_TPS6507X)	+= tps6507x-ts.o
 obj-$(CONFIG_TOUCHSCREEN_MSM_LEGACY)		+= msm_touch.o
 obj-$(CONFIG_TOUCHSCREEN_CY8C_TS)	+= cy8c_ts.o
 obj-$(CONFIG_TOUCHSCREEN_CYTTSP_I2C)       += cyttsp-i2c.o
+obj-$(CONFIG_TOUCHSCREEN_MELFAS100_TS)	+= melfas100_ts.o
+obj-$(CONFIG_TOUCHSCREEN_ATMXT)		+= atmxt.o

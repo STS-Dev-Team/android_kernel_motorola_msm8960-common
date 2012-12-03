@@ -71,6 +71,7 @@
 #include "f_rndis.c"
 #include "rndis.c"
 #include "u_ether.c"
+#include "f_usbnet.c"
 
 MODULE_AUTHOR("Mike Lockwood");
 MODULE_DESCRIPTION("Android Composite USB Driver");
@@ -82,6 +83,12 @@ static const char longname[] = "Gadget Android";
 /* Default vendor and product IDs, overridden by userspace */
 #define VENDOR_ID		0x18D1
 #define PRODUCT_ID		0x0001
+
+enum function_type {
+	FT_UNKNOWN = 0,
+	FT_CDROM,
+	FT_MTPUSBNET
+};
 
 struct android_usb_function {
 	char *name;
@@ -126,7 +133,12 @@ struct android_dev {
 	struct mutex mutex;
 	bool connected;
 	bool sw_connected;
+	int switch_index;
+	bool usb_configured;
+	bool cdrom_mounted;
+	enum function_type curr_func_type;
 	struct work_struct work;
+	struct work_struct async_work;
 };
 
 static struct class *android_class;
@@ -142,6 +154,7 @@ static void android_unbind_config(struct usb_configuration *c);
 static char manufacturer_string[256];
 static char product_string[256];
 static char serial_string[256];
+static char cdrom_blkdev_path[256];
 
 /* String Table */
 static struct usb_string strings_dev[] = {
@@ -178,6 +191,9 @@ static struct usb_configuration android_config_driver = {
 	.bConfigurationValue = 1,
 };
 
+static int mass_storage_function_set_cdrom_lun(char *lunpath);
+static void send_usb_action_uevents(void);
+
 static void android_work(struct work_struct *data)
 {
 	struct android_dev *dev = container_of(data, struct android_dev, work);
@@ -187,6 +203,8 @@ static void android_work(struct work_struct *data)
 	char *configured[2]   = { "USB_STATE=CONFIGURED", NULL };
 	char **uevent_envp = NULL;
 	unsigned long flags;
+	int rc = 0;
+	char ch = 0;
 
 	spin_lock_irqsave(&cdev->lock, flags);
         if (cdev->config)
@@ -196,12 +214,84 @@ static void android_work(struct work_struct *data)
 	dev->sw_connected = dev->connected;
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
+	/* Handle all CDROM / MTPUSBNET events */
+	if ((dev->curr_func_type == FT_CDROM) && (uevent_envp == configured)) {
+
+		/* Mount CDROM partition when we get configured */
+		rc = mass_storage_function_set_cdrom_lun(cdrom_blkdev_path);
+
+	} else if ((dev->cdrom_mounted) && (uevent_envp != configured)) {
+
+		/* Unmount CDROM partition when disconnected */
+		rc = mass_storage_function_set_cdrom_lun(&ch);
+
+	} else if ((dev->curr_func_type == FT_MTPUSBNET) &&
+		(uevent_envp == configured)) {
+
+		/* We have switched from CDROM to MTPUSBNET */
+		dev->usb_configured = true;
+
+	} else if ((dev->curr_func_type == FT_MTPUSBNET) &&
+		(uevent_envp == connected) && (dev->usb_configured)) {
+
+		/* Handle a mode change when we connected in MTPUSBNET mode */
+		dev->usb_configured = false;
+
+	} else if ((dev->curr_func_type == FT_MTPUSBNET) &&
+		(uevent_envp == disconnected) && (dev->usb_configured)) {
+
+		/* Handle a disconnection when connected in MTPUSBNET */
+		dev->switch_index = SWITCH_INDEX_CDROM;
+		send_usb_action_uevents();
+		dev->usb_configured = false;
+
+	}
+
+
 	if (uevent_envp) {
 		kobject_uevent_env(&dev->dev->kobj, KOBJ_CHANGE, uevent_envp);
-		pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
+		pr_info("android_usb: sent uevent %s\n", uevent_envp[0]);
 	} else {
-		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
+		pr_info("android_usb: did not send uevent (%d %d %p)\n",
 			 dev->connected, dev->sw_connected, cdev->config);
+	}
+}
+
+static void send_usb_action_uevents()
+{
+	struct android_dev *dev = _android_dev;
+	char tmp_str[255];
+	char *uevent_envp[3];
+
+	snprintf(tmp_str, 255, "USB_ACTION_VALUE=switch%02d",
+			dev->switch_index);
+
+	uevent_envp[0] = "USB_ACTION_NAME=SETPROP";
+	uevent_envp[1] = tmp_str;
+	uevent_envp[2] = NULL;
+
+	kobject_uevent_env(&dev->dev->kobj, KOBJ_CHANGE, uevent_envp);
+	pr_info("android_usb: sent uevent %s %s\n", uevent_envp[0],
+			uevent_envp[1]);
+}
+
+static void android_async_work(struct work_struct *data)
+{
+	send_usb_action_uevents();
+	return;
+}
+
+void handle_switch_index(int index)
+{
+	struct android_dev *dev = _android_dev;
+
+	if ((index == SWITCH_INDEX_RESET) ||
+		((dev->curr_func_type == FT_CDROM) &&
+		 (index == SWITCH_INDEX_MTPUSBNET))) {
+
+		dev->switch_index = index;
+		schedule_work(&dev->async_work);
+
 	}
 }
 
@@ -230,6 +320,7 @@ static void android_disable(struct android_dev *dev)
 		/* Cancel pending control requests */
 		usb_ep_dequeue(cdev->gadget->ep0, cdev->req);
 		usb_remove_config(cdev, &android_config_driver);
+		usb_ep_autoconfig_reset(cdev->gadget);
 	}
 }
 
@@ -945,6 +1036,10 @@ struct mass_storage_function_config {
 	struct fsg_common *common;
 };
 
+/* sizes based on inquiry string requirements */
+static char ms_vendor[9];
+static char ms_product[17];
+
 static int mass_storage_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
@@ -957,8 +1052,14 @@ static int mass_storage_function_init(struct android_usb_function *f,
 	if (!config)
 		return -ENOMEM;
 
+	config->fsg.cdrom_lun_num = 0;
 	config->fsg.nluns = 1;
 	config->fsg.luns[0].removable = 1;
+	/* defaults that should be overriden by user space */
+	strncpy(ms_vendor, "Android", sizeof(ms_vendor));
+	strncpy(ms_product, "Android", sizeof(ms_product));
+	config->fsg.vendor_name = ms_vendor;
+	config->fsg.product_name = ms_product;
 
 	common = fsg_common_init(NULL, cdev, &config->fsg);
 	if (IS_ERR(common)) {
@@ -1017,10 +1118,118 @@ static DEVICE_ATTR(inquiry_string, S_IRUGO | S_IWUSR,
 					mass_storage_inquiry_show,
 					mass_storage_inquiry_store);
 
+static ssize_t mass_storage_vendor_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct android_usb_function *f = dev_get_drvdata(dev);
+	struct mass_storage_function_config *config = f->config;
+
+	if ((size - 1) >= sizeof(ms_vendor))
+		return -EINVAL;
+
+	strncpy(ms_vendor, buf, sizeof(ms_vendor));
+	ms_vendor[sizeof(ms_vendor)-1] = 0;
+	snprintf(config->common->inquiry_string,
+		sizeof config->common->inquiry_string,
+		"%-8s%-16s%04x", ms_vendor, ms_product, 1);
+
+	return size;
+}
+
+static DEVICE_ATTR(vendor, S_IWUSR, NULL, mass_storage_vendor_store);
+
+static ssize_t mass_storage_product_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct android_usb_function *f = dev_get_drvdata(dev);
+	struct mass_storage_function_config *config = f->config;
+
+	if ((size - 1) >= sizeof(ms_product))
+		return -EINVAL;
+
+	strncpy(ms_product, buf, sizeof(ms_product));
+	ms_product[sizeof(ms_product)-1] = 0;
+	snprintf(config->common->inquiry_string,
+		sizeof config->common->inquiry_string,
+		"%-8s%-16s%04x", ms_vendor, ms_product, 1);
+
+	return size;
+}
+
+static DEVICE_ATTR(product, S_IWUSR, NULL, mass_storage_product_store);
+
+static ssize_t mass_storage_cdrom_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int value;
+
+	if (sscanf(buf, "%d", &value) == 1) {
+		pr_info("android_usb: ms_cdrom_enable =  %d\n", value);
+		ms_cdrom_enable = value;
+		return size;
+	}
+
+	return -EINVAL;
+}
+
+
+static DEVICE_ATTR(cdrom, S_IWUSR, NULL, mass_storage_cdrom_store);
+
 static struct device_attribute *mass_storage_function_attributes[] = {
 	&dev_attr_inquiry_string,
+	&dev_attr_vendor,
+	&dev_attr_product,
+	&dev_attr_cdrom,
 	NULL
 };
+
+static int mass_storage_function_set_cdrom_lun(char *lunpath)
+{
+	struct android_dev *dev = _android_dev;
+	struct android_usb_function **functions = dev->functions;
+	struct android_usb_function *f;
+	struct mass_storage_function_config *config;
+	int cdromlun_num;
+	struct fsg_lun  *cdromlun;
+	int rc = 0;
+
+	/* look up for mass storage function instance */
+	while ((f = *functions++)) {
+		if (!strcmp("mass_storage", f->name))
+			break;
+	}
+
+	if (f == NULL) {
+		pr_info("android_usb: set_cdrom_lun - no mass storage\n");
+		return -1;
+	}
+	config = f->config;
+	cdromlun_num = config->fsg.cdrom_lun_num;
+	cdromlun = &(config->common->luns[cdromlun_num]);
+
+	dev->cdrom_mounted = false;
+	/* Eject current medium */
+	if (fsg_lun_is_open(cdromlun)) {
+		pr_info("android_usb: set_cdrom_lun - ejected\n");
+		fsg_lun_close(cdromlun);
+		cdromlun->unit_attention_data = SS_MEDIUM_NOT_PRESENT;
+	}
+
+	/* Load new medium */
+	if (lunpath[0]) {
+		pr_info("android_usb: set_cdrom_lun = %s\n", lunpath);
+		rc = fsg_lun_open(cdromlun, lunpath);
+		if (rc)
+			pr_err("android_usb: set_cdrom_lun failed %d\n", rc);
+		else
+			cdromlun->unit_attention_data =
+				SS_NOT_READY_TO_READY_TRANSITION;
+
+		dev->cdrom_mounted = true;
+	}
+
+	return rc;
+}
 
 static struct android_usb_function mass_storage_function = {
 	.name		= "mass_storage",
@@ -1061,6 +1270,83 @@ static struct android_usb_function accessory_function = {
 	.cleanup	= accessory_function_cleanup,
 	.bind_config	= accessory_function_bind_config,
 	.ctrlrequest	= accessory_function_ctrlrequest,
+};
+
+static int usbnet_function_init(struct android_usb_function *f,
+				struct usb_composite_dev *cdev)
+{
+	struct usbnet_device *dev;
+	struct usbnet_context *context;
+	struct net_device *net_dev;
+	int ret;
+
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+	if (!dev)
+		return -ENOMEM;
+
+	net_dev = alloc_netdev(sizeof(struct usbnet_context),
+			   "usb%d", usb_ether_setup);
+	if (!net_dev) {
+		pr_err("%s: alloc_netdev error\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = register_netdev(net_dev);
+	if (ret) {
+		pr_err("%s: register_netdev error\n", __func__);
+		free_netdev(net_dev);
+		return -EINVAL;
+	}
+
+	ret = device_create_file(&net_dev->dev, &dev_attr_description);
+	if (ret < 0) {
+		pr_err("%s: sys file creation  error\n", __func__);
+		unregister_netdev(net_dev);
+		free_netdev(net_dev);
+		return -EINVAL;
+	}
+
+	context = netdev_priv(net_dev);
+	INIT_WORK(&context->usbnet_config_wq, usbnet_if_config);
+
+	context->config = 0;
+	dev->net_ctxt = context;
+
+	f->config = dev;
+
+	switch_dev_register(&usbnet_enable_device);
+	return 0;
+}
+
+static void usbnet_function_cleanup(struct android_usb_function *f)
+{
+	struct usbnet_device *dev = f->config;
+
+	usbnet_cleanup(dev);
+	switch_dev_unregister(&usbnet_enable_device);
+}
+
+static int usbnet_function_bind_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+	struct usbnet_device *dev = f->config;
+
+	return usbnet_bind_config(dev, c);
+}
+
+static int usbnet_function_ctrlrequest(struct android_usb_function *f, struct usb_composite_dev *cdev,
+					const struct usb_ctrlrequest *c)
+{
+	struct usbnet_device *dev = f->config;
+
+	return usbnet_ctrlrequest(dev, cdev, c);
+}
+
+static struct android_usb_function usbnet_function = {
+	.name		= "usbnet",
+	.init		= usbnet_function_init,
+	.cleanup	= usbnet_function_cleanup,
+	.bind_config	= usbnet_function_bind_config,
+	.ctrlrequest	= usbnet_function_ctrlrequest,
 };
 
 static int audio_source_function_init(struct android_usb_function *f,
@@ -1140,6 +1426,7 @@ static struct android_usb_function *supported_functions[] = {
 	&rndis_function,
 	&mass_storage_function,
 	&accessory_function,
+	&usbnet_function,
 	&audio_source_function,
 	NULL
 };
@@ -1321,6 +1608,14 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	INIT_LIST_HEAD(&dev->enabled_functions);
 
 	strlcpy(buf, buff, sizeof(buf));
+	pr_info("android_usb: set functions= %s\n", buf);
+
+	dev->curr_func_type = FT_UNKNOWN;
+	if (strstr(buf, "mass_storage") && ms_cdrom_enable)
+		dev->curr_func_type = FT_CDROM;
+	else if (strstr(buf, "mtp,usbnet") && (!strstr(buf, "mtp,usbnet,adb")))
+		dev->curr_func_type = FT_MTPUSBNET;
+
 	b = strim(buf);
 
 	while (b) {
@@ -1370,6 +1665,7 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 		android_enable(dev);
 		dev->enabled = true;
 	} else if (!enabled && dev->enabled) {
+		ms_cdrom_enable = 0;
 		android_disable(dev);
 		list_for_each_entry(f, &dev->enabled_functions, enabled_list) {
 			if (f->disable)
@@ -1404,6 +1700,21 @@ static ssize_t state_show(struct device *pdev, struct device_attribute *attr,
 	spin_unlock_irqrestore(&cdev->lock, flags);
 out:
 	return snprintf(buf, PAGE_SIZE, "%s\n", state);
+}
+
+static ssize_t usb_action_show(struct device *pdev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct android_dev *dev = dev_get_drvdata(pdev);
+
+	if ((dev->switch_index == SWITCH_INDEX_CDROM) ||
+		(dev->switch_index == SWITCH_INDEX_MTPUSBNET))
+		return snprintf(buf, PAGE_SIZE, "switch%02d\n",
+				dev->switch_index);
+	else
+		return snprintf(buf, PAGE_SIZE, "none\n");
+
 }
 
 #define DESCRIPTOR_ATTR(field, format_string)				\
@@ -1455,12 +1766,14 @@ DESCRIPTOR_ATTR(bDeviceProtocol, "%d\n")
 DESCRIPTOR_STRING_ATTR(iManufacturer, manufacturer_string)
 DESCRIPTOR_STRING_ATTR(iProduct, product_string)
 DESCRIPTOR_STRING_ATTR(iSerial, serial_string)
+DESCRIPTOR_STRING_ATTR(cdrom_blkdev, cdrom_blkdev_path)
 
 static DEVICE_ATTR(functions, S_IRUGO | S_IWUSR, functions_show, functions_store);
 static DEVICE_ATTR(enable, S_IRUGO | S_IWUSR, enable_show, enable_store);
 static DEVICE_ATTR(state, S_IRUGO, state_show, NULL);
 static DEVICE_ATTR(remote_wakeup, S_IRUGO | S_IWUSR,
 		remote_wakeup_show, remote_wakeup_store);
+static DEVICE_ATTR(usb_action, S_IRUGO, usb_action_show, NULL);
 
 static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_idVendor,
@@ -1476,6 +1789,8 @@ static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_enable,
 	&dev_attr_state,
 	&dev_attr_remote_wakeup,
+	&dev_attr_cdrom_blkdev,
+	&dev_attr_usb_action,
 	NULL
 };
 
@@ -1540,6 +1855,11 @@ static int android_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_SERIAL_IDX].id = id;
 	device_desc.iSerialNumber = id;
 
+	/* init CDROM state */
+	ms_cdrom_enable = 0;
+	strlcpy(cdrom_blkdev_path, "/dev/block/cdrom",
+			sizeof(cdrom_blkdev_path) - 1);
+
 	gcnum = usb_gadget_controller_number(gadget);
 	if (gcnum >= 0)
 		device_desc.bcdDevice = cpu_to_le16(0x0200 + gcnum);
@@ -1566,6 +1886,7 @@ static int android_usb_unbind(struct usb_composite_dev *cdev)
 	struct android_dev *dev = _android_dev;
 
 	cancel_work_sync(&dev->work);
+	cancel_work_sync(&dev->async_work);
 	android_cleanup_functions(dev->functions);
 	return 0;
 }
@@ -1586,11 +1907,40 @@ android_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *c)
 	struct android_usb_function	*f;
 	int value = -EOPNOTSUPP;
 	unsigned long flags;
+	u16 wIndex = le16_to_cpu(c->wIndex);
+	u16 wValue = le16_to_cpu(c->wValue);
+	u16 wLength = le16_to_cpu(c->wLength);
 
 	req->zero = 0;
 	req->complete = composite_setup_complete;
 	req->length = 0;
 	gadget->ep0->driver_data = cdev;
+
+	switch (c->bRequestType & USB_TYPE_MASK) {
+	case USB_TYPE_VENDOR:
+		switch (c->bRequest) {
+		case 1:
+			if ((wValue == 0) && (wLength == 0)) {
+				value = 0;
+				req->zero = 0;
+				req->length = value;
+				if (usb_ep_queue
+				    (cdev->gadget->ep0, req, GFP_ATOMIC))
+					pr_err("ep0 in queue failed\n");
+
+				handle_switch_index(wIndex);
+			}
+			break;
+		default:
+			break;
+		}
+	default:
+		break;
+	}
+
+	/*if request processed ,return */
+	if (value >= 0)
+		return value;
 
 	list_for_each_entry(f, &dev->enabled_functions, enabled_list) {
 		if (f->ctrlrequest) {
@@ -1710,6 +2060,7 @@ static int __init init(void)
 	INIT_LIST_HEAD(&dev->enabled_functions);
 	INIT_WORK(&dev->work, android_work);
 	mutex_init(&dev->mutex);
+	INIT_WORK(&dev->async_work, android_async_work);
 
 	ret = android_create_device(dev);
 	if (ret) {

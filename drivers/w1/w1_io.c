@@ -160,9 +160,9 @@ static u8 w1_read_bit(struct w1_master *dev)
 	int result;
 
 	dev->bus_master->write_bit(dev->bus_master->data, 0);
-	w1_delay(6);
+	w1_delay(3);
 	dev->bus_master->write_bit(dev->bus_master->data, 1);
-	w1_delay(9);
+	w1_delay(4);
 
 	result = dev->bus_master->read_bit(dev->bus_master->data);
 	w1_delay(55);
@@ -335,7 +335,7 @@ int w1_reset_bus(struct w1_master *dev)
 		 * the following transactions.  Sleeping is safe here.
 		 */
 		/* w1_delay(410); min required time */
-		msleep(1);
+		mdelay(1);
 	}
 
 	return result;

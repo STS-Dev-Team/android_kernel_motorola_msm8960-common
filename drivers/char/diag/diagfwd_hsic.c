@@ -429,7 +429,7 @@ static int diag_hsic_probe(struct platform_device *pdev)
 	 * on the legacy channel. Communication over usb mdm and hsic
 	 * needs to be turned on.
 	 */
-	if (driver->usb_connected) {
+	if (driver->channel_connected) {
 		driver->hsic_ch = 1;
 		driver->in_busy_hsic_write_on_mdm = 0;
 		driver->in_busy_hsic_read_on_mdm = 0;

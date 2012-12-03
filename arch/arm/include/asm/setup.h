@@ -143,6 +143,77 @@ struct tag_memclk {
 	__u32 fmemclk;
 };
 
+/* legacy motorola monolythic ATAG: a source of trouble when extended */
+#define ATAG_MOTOROLA	0x41000810
+#define ATAG_BLDEBUG	0x41000811
+
+#define ATAG_DISPLAY	0x41000813
+
+/* currently just a string denoting the panel type */
+struct tag_display {
+	char display[1];
+};
+
+#define ATAG_MBM_PROTOCOL_VERSION 0xf1000414
+struct tag_mbm_protocol_version {
+	uint32_t value;
+};
+
+#ifdef CONFIG_BOOTINFO
+
+/* Powerup Reason */
+#define ATAG_POWERUP_REASON 0xf1000401
+
+struct tag_powerup_reason {
+	uint32_t powerup_reason;
+};
+
+/* MBM version */
+#define ATAG_MBM_VERSION 0xf1000407
+struct tag_mbm_version {
+	uint32_t mbm_version;
+};
+
+/* Flat device tree address */
+#define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
+struct tag_flat_dev_tree_address {
+	u32 address;
+	u32 size;
+};
+
+/* Battery status at boot */
+#define ATAG_BATTERY_STATUS_AT_BOOT 0xf100040E
+struct tag_battery_status_at_boot {
+	uint16_t battery_status_at_boot;
+	uint16_t padding;
+};
+
+/* CID recover boot */
+#define ATAG_CID_RECOVER_BOOT 0xf1000415
+struct tag_cid_recover_boot {
+	uint32_t cid_recover_boot;
+};
+
+/* Bootloader build signature */
+#define ATAG_BL_BUILD_SIG 0xf1000418
+struct tag_bl_build_sig {
+	char bl_build_sig[1];
+};
+
+#endif /*  CONFIG_BOOTINFO */
+
+#define ATAG_EMMC_VERSION 0xf1000416
+struct tag_emmc_version {
+	unsigned int raw_cid[4];
+	unsigned int raw_csd[4];
+	unsigned char raw_ecsd[512];
+};
+
+#define ATAG_BASEBAND 0x41000812
+struct tag_baseband {
+	char baseband[1];
+};
+
 struct tag {
 	struct tag_header hdr;
 	union {
@@ -165,6 +236,22 @@ struct tag {
 		 * DC21285 specific
 		 */
 		struct tag_memclk	memclk;
+
+		/*
+		 * Motorola specific
+		 */
+		struct tag_display	display;
+		struct tag_mbm_protocol_version  mbm_protocol_version;
+		struct tag_flat_dev_tree_address	fdt_addr;
+		struct tag_baseband	baseband;
+#ifdef CONFIG_BOOTINFO
+		struct tag_powerup_reason	       powerup_reason;
+		struct tag_mbm_version                 mbm_version;
+		struct tag_battery_status_at_boot      battery_status_at_boot;
+		struct tag_cid_recover_boot            cid_recover_boot;
+		struct tag_bl_build_sig                bl_build_sig;
+#endif /*  CONFIG_BOOTINFO */
+		struct tag_emmc_version emmc_version;
 	} u;
 };
 
@@ -206,6 +293,20 @@ struct meminfo {
 };
 
 extern struct meminfo meminfo;
+
+#ifdef CONFIG_DONT_MAP_HOLE_IN_LOWMEM
+struct vmembank {
+	unsigned long start;
+	unsigned long delta;
+};
+
+struct vmeminfo {
+	int nr_banks;
+	struct vmembank vbank[NR_BANKS];
+};
+
+extern struct vmeminfo vmeminfo;
+#endif
 
 #define for_each_bank(iter,mi)				\
 	for (iter = 0; iter < (mi)->nr_banks; iter++)

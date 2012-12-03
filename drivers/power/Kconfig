@@ -352,4 +352,40 @@ config PM8921_BMS
 	help
 	  Say Y here to enable support for pm8921 chip bms subdevice
 
+config BATTERY_MMI
+	tristate "Motorola Mobility Inc. Battery driver"
+	select W1
+	select W1_SLAVE_DS2502
+	help
+	  Say Y here to enable support for MMI Batteries
+
+config PM8921_EXTENDED_INFO
+	bool "Enable PM8921 Extended Info in teh BMS and Charger driver"
+	depends on PM8921_BMS
+	depends on PM8921_CHARGER
+	help
+	  Say Y here to enable support for Pm8921 Extended Info
+
+config PM8921_FACTORY_SHUTDOWN
+	bool "Enable PM8921 factory shutdown support"
+	depends on PM8921_CHARGER
+	help
+	  Say Y here to enable factory shutdown support in PM8921 Charger
+	  driver.
+
+config PM8921_TEST_OVERRIDE
+	bool "Enable PM8921 user-space override test functionality"
+	depends on PM8921_CHARGER && PM8921_BMS
+	default n
+	help
+	  Say Y here to enable user-space override of specific battery
+	  state variables.  To be used for test purposes only
+
+config PM8921_FLOAT_CHARGE
+	bool "Enable PM8921 Float Charge in the BMS and Charger driver"
+	depends on PM8921_BMS
+	depends on PM8921_CHARGER
+	help
+	  Say Y here to enable support for Pm8921 Float charge
+
 endif # POWER_SUPPLY

@@ -376,6 +376,8 @@ void ddl_release_client_internal_buffers(struct ddl_client_context *ddl)
 		struct ddl_encoder_data *encoder =
 			&(ddl->codec_data.encoder);
 		ddl_pmem_free(&encoder->seq_header);
+		ddl_pmem_free(&encoder->batch_frame.slice_batch_in);
+		ddl_pmem_free(&encoder->batch_frame.slice_batch_out);
 		ddl_vidc_encode_dynamic_property(ddl, false);
 		encoder->dynamic_prop_change = 0;
 		ddl_free_enc_hw_buffers(ddl);
@@ -738,7 +740,7 @@ u32 ddl_allocate_dec_hw_buffers(struct ddl_client_context *ddl)
 		else {
 			if (!res_trk_check_for_sec_session()) {
 				memset(dec_bufs->desc.align_virtual_addr,
-					0, buf_size.sz_desc);
+					   0, buf_size.sz_desc);
 				msm_ion_do_cache_op(
 					ddl_context->video_ion_client,
 					dec_bufs->desc.alloc_handle,
@@ -988,15 +990,33 @@ u32 ddl_check_reconfig(struct ddl_client_context *ddl)
 				 decoder->client_frame_size.height);
 		}
 	} else {
+		u32 min_count = decoder->actual_output_buf_req.min_count;
+		u32 actual_count = decoder->actual_output_buf_req.actual_count;
+
+		if ((decoder->frame_size.width >= 1920) &&
+			(decoder->frame_size.height >= 1080)) {
+			if (min_count <
+				decoder->client_output_buf_req.min_count) {
+				min_count =
+				decoder->client_output_buf_req.min_count;
+			}
+
+			if (actual_count <
+				decoder->client_output_buf_req.actual_count) {
+				actual_count =
+				decoder->client_output_buf_req.actual_count;
+			}
+		}
+
 		if ((decoder->frame_size.width ==
 			decoder->client_frame_size.width) &&
 			(decoder->frame_size.height ==
 			decoder->client_frame_size.height) &&
 			(decoder->actual_output_buf_req.sz <=
 			decoder->client_output_buf_req.sz) &&
-			(decoder->actual_output_buf_req.min_count ==
+			(min_count ==
 			decoder->client_output_buf_req.min_count) &&
-			(decoder->actual_output_buf_req.actual_count ==
+			(actual_count ==
 			decoder->client_output_buf_req.actual_count) &&
 			(decoder->frame_size.scan_lines ==
 			decoder->client_frame_size.scan_lines) &&

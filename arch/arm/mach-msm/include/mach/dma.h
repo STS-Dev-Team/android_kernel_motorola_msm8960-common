@@ -45,8 +45,7 @@ struct msm_dmov_pdata {
 
 void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd);
 void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd);
-void msm_dmov_stop_cmd(unsigned id, struct msm_dmov_cmd *cmd, int graceful);
-void msm_dmov_flush(unsigned int id);
+void msm_dmov_flush(unsigned int id, int graceful);
 int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 
 #define DMOV_CRCIS_PER_CONF 10
@@ -176,6 +175,14 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 
 #define DMOV_CE_OUT_CHAN       1
 #define DMOV_CE_OUT_CRCI       3
+
+#define DMOV_WHISPER_TX_CHAN   4
+#define DMOV_WHISPER_TX_CRCI_GSBI12   15
+#define DMOV_WHISPER_TX_CRCI_GSBI4    8
+
+#define DMOV_WHISPER_RX_CHAN   5
+#define DMOV_WHISPER_RX_CRCI_GSBI12   14
+#define DMOV_WHISPER_RX_CRCI_GSBI4    7
 
 #define DMOV_TSIF_CHAN         2
 #define DMOV_TSIF_CRCI         11

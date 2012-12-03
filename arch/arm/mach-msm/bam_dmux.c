@@ -168,6 +168,7 @@ static DEFINE_MUTEX(bam_rx_pool_mutexlock);
 static int bam_rx_pool_len;
 static LIST_HEAD(bam_tx_pool);
 static DEFINE_SPINLOCK(bam_tx_pool_spinlock);
+static DEFINE_MUTEX(bam_pdev_mutexlock);
 
 struct bam_mux_hdr {
 	uint16_t magic_num;
@@ -477,15 +478,24 @@ static inline void handle_bam_mux_cmd_open(struct bam_mux_hdr *rx_hdr)
 	unsigned long flags;
 	int ret;
 
+	mutex_lock(&bam_pdev_mutexlock);
+	if (in_global_reset) {
+		bam_dmux_log("%s: open cid %d aborted due to ssr\n",
+				__func__, rx_hdr->ch_id);
+		mutex_unlock(&bam_pdev_mutexlock);
+		queue_rx();
+		return;
+	}
 	spin_lock_irqsave(&bam_ch[rx_hdr->ch_id].lock, flags);
 	bam_ch[rx_hdr->ch_id].status |= BAM_CH_REMOTE_OPEN;
 	bam_ch[rx_hdr->ch_id].num_tx_pkts = 0;
 	spin_unlock_irqrestore(&bam_ch[rx_hdr->ch_id].lock, flags);
-	queue_rx();
 	ret = platform_device_add(bam_ch[rx_hdr->ch_id].pdev);
 	if (ret)
 		pr_err("%s: platform_device_add() error: %d\n",
 				__func__, ret);
+	mutex_unlock(&bam_pdev_mutexlock);
+	queue_rx();
 }
 
 static void handle_bam_mux_cmd(struct work_struct *work)
@@ -538,7 +548,8 @@ static void handle_bam_mux_cmd(struct work_struct *work)
 				rx_hdr->ch_id);
 		handle_bam_mux_cmd_open(rx_hdr);
 		if (rx_hdr->reserved & ENABLE_DISCONNECT_ACK) {
-			bam_dmux_log("%s: activating disconnect ack\n");
+			bam_dmux_log("%s: activating disconnect ack\n",
+					__func__);
 			disconnect_ack = 1;
 		}
 		dev_kfree_skb_any(rx_skb);
@@ -559,16 +570,24 @@ static void handle_bam_mux_cmd(struct work_struct *work)
 		/* probably should drop pending write */
 		bam_dmux_log("%s: closing cid %d\n", __func__,
 				rx_hdr->ch_id);
+		mutex_lock(&bam_pdev_mutexlock);
+		if (in_global_reset) {
+			bam_dmux_log("%s: close cid %d aborted due to ssr\n",
+					__func__, rx_hdr->ch_id);
+			mutex_unlock(&bam_pdev_mutexlock);
+			break;
+		}
 		spin_lock_irqsave(&bam_ch[rx_hdr->ch_id].lock, flags);
 		bam_ch[rx_hdr->ch_id].status &= ~BAM_CH_REMOTE_OPEN;
 		spin_unlock_irqrestore(&bam_ch[rx_hdr->ch_id].lock, flags);
-		queue_rx();
 		platform_device_unregister(bam_ch[rx_hdr->ch_id].pdev);
 		bam_ch[rx_hdr->ch_id].pdev =
 			platform_device_alloc(bam_ch[rx_hdr->ch_id].name, 2);
 		if (!bam_ch[rx_hdr->ch_id].pdev)
 			pr_err("%s: platform_device_alloc failed\n", __func__);
+		mutex_unlock(&bam_pdev_mutexlock);
 		dev_kfree_skb_any(rx_skb);
+		queue_rx();
 		break;
 	default:
 		DMUX_LOG_KERR("%s: dropping invalid hdr. magic %x"
@@ -1053,7 +1072,7 @@ static void rx_switch_to_interrupt_mode(void)
 
 fail:
 	pr_err("%s: reverting to polling\n", __func__);
-	queue_work(bam_mux_rx_workqueue, &rx_timer_work);
+	queue_work_on(0, bam_mux_rx_workqueue, &rx_timer_work);
 }
 
 static void rx_timer_work_func(struct work_struct *work)
@@ -1158,7 +1177,11 @@ static void bam_mux_rx_notify(struct sps_event_notify *notify)
 			}
 			grab_wakelock();
 			polling_mode = 1;
-			queue_work(bam_mux_rx_workqueue, &rx_timer_work);
+			/*
+			 * run on core 0 so that netif_rx() in rmnet uses only
+			 * one queue
+			 */
+			queue_work_on(0, bam_mux_rx_workqueue, &rx_timer_work);
 		}
 		break;
 	default:
@@ -1774,6 +1797,7 @@ static int restart_notifier_cb(struct notifier_block *this,
 	disconnect_ack = 0;
 
 	/* Cleanup Channel States */
+	mutex_lock(&bam_pdev_mutexlock);
 	for (i = 0; i < BAM_DMUX_NUM_CHANNELS; ++i) {
 		temp_remote_status = bam_ch_is_remote_open(i);
 		bam_ch[i].status &= ~BAM_CH_REMOTE_OPEN;
@@ -1786,6 +1810,7 @@ static int restart_notifier_cb(struct notifier_block *this,
 						bam_ch[i].name, 2);
 		}
 	}
+	mutex_unlock(&bam_pdev_mutexlock);
 
 	/* Cleanup pending UL data */
 	spin_lock_irqsave(&bam_tx_pool_spinlock, flags);
@@ -2112,7 +2137,13 @@ static int bam_dmux_probe(struct platform_device *pdev)
 	if (rc)
 		pr_err("%s: unable to set dfab clock rate\n", __func__);
 
-	bam_mux_rx_workqueue = create_singlethread_workqueue("bam_dmux_rx");
+	/*
+	 * setup the workqueue so that it can be pinned to core 0 and not
+	 * block the watchdog pet function, so that netif_rx() in rmnet
+	 * only uses one queue.
+	 */
+	bam_mux_rx_workqueue = alloc_workqueue("bam_dmux_rx",
+					WQ_MEM_RECLAIM | WQ_CPU_INTENSIVE, 1);
 	if (!bam_mux_rx_workqueue)
 		return -ENOMEM;
 

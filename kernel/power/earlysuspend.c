@@ -43,6 +43,15 @@ enum {
 	SUSPEND_REQUESTED_AND_SUSPENDED = SUSPEND_REQUESTED | SUSPENDED,
 };
 static int state;
+#ifdef CONFIG_PM_DEBUG
+static void stuck_wakelock_timeout(unsigned long data);
+static void stuck_wakelock_wdset(void);
+static void stuck_wakelock_wdclr(void);
+static DEFINE_TIMER(stuck_wakelock_wd, stuck_wakelock_timeout, 0, 0);
+#else
+static inline void stuck_wakelock_wdset(void) {}
+static inline void stuck_wakelock_wdclr(void) {}
+#endif
 
 void register_early_suspend(struct early_suspend *handler)
 {
@@ -70,11 +79,17 @@ void unregister_early_suspend(struct early_suspend *handler)
 }
 EXPORT_SYMBOL(unregister_early_suspend);
 
+extern int compact_nodes(void);
+
 static void early_suspend(struct work_struct *work)
 {
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
+
+#ifdef CONFIG_COMPACTION
+	compact_nodes();
+#endif
 
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
@@ -103,6 +118,7 @@ static void early_suspend(struct work_struct *work)
 	mutex_unlock(&early_suspend_lock);
 
 	suspend_sys_sync_queue();
+	stuck_wakelock_wdset();
 abort:
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED_AND_SUSPENDED)
@@ -139,10 +155,13 @@ static void late_resume(struct work_struct *work)
 			pos->resume(pos);
 		}
 	}
+
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("late_resume: done\n");
 abort:
 	mutex_unlock(&early_suspend_lock);
+
+	stuck_wakelock_wdclr();
 }
 
 void request_suspend_state(suspend_state_t new_state)
@@ -181,3 +200,39 @@ suspend_state_t get_suspend_state(void)
 {
 	return requested_suspend_state;
 }
+
+#ifdef CONFIG_PM_DEBUG
+/**
+ *      stuck_wakelock_timeout - stuck wakelocks dump watchdog
+ *      handler
+ *
+ *      Called after early suspend to dump the stuck wake locks
+ *      clear in late resume.
+ *
+ */
+static void stuck_wakelock_timeout(unsigned long data)
+{
+	pr_info("**** active wakelocks ****\n");
+	has_wake_lock(WAKE_LOCK_SUSPEND);
+	stuck_wakelock_wdset();
+}
+
+/**
+ *      stuck_wakelock_wdset - Sets up stuck wakelocks dump
+ *      watchdog timer.
+ */
+static void stuck_wakelock_wdset()
+{
+	mod_timer(&stuck_wakelock_wd, jiffies + (HZ * 600));
+}
+
+/**
+ *      stuck_wakelock_wdclr - clears stuck wakelocks dump
+ *      watchdog timer.
+ *
+ */
+static void stuck_wakelock_wdclr(void)
+{
+	del_timer_sync(&stuck_wakelock_wd);
+}
+#endif

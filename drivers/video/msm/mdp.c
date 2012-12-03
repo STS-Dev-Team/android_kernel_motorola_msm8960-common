@@ -1176,10 +1176,17 @@ static int mdp_do_histogram(struct fb_info *info,
 	mgmt->hist = hist;
 	mutex_unlock(&mgmt->mdp_hist_mutex);
 
-	if (wait_for_completion_killable(&mgmt->mdp_hist_comp)) {
+	ret = wait_for_completion_killable_timeout(&mgmt->mdp_hist_comp, HZ);
+	if (0 > ret) {
 		pr_err("%s(): histogram bin collection killed", __func__);
 		ret = -EINVAL;
 		goto error;
+	} else if (!ret) {
+		pr_err("%s(): Waiting Timeout for mdp_hist_comp\n", __func__);
+		mdp4_hang_panic();
+		mutex_lock(&mgmt->mdp_hist_mutex);
+		mgmt->hist = NULL;
+		mutex_unlock(&mgmt->mdp_hist_mutex);
 	}
 
 	mutex_lock(&mgmt->mdp_hist_mutex);
@@ -1295,7 +1302,12 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 		INIT_COMPLETION(mdp_ppp_comp);
 		mdp_ppp_waiting = TRUE;
 		outpdw(MDP_BASE + 0x30, 0x1000);
-		wait_for_completion_killable(&mdp_ppp_comp);
+		if (!wait_for_completion_killable_timeout(&mdp_ppp_comp, HZ)) {
+			printk(KERN_ERR "%s: Wait timeout for mdp_ppp_comp\n",
+						__func__);
+			mdp4_hang_panic();
+			mdp_ppp_waiting = FALSE;
+		}
 		mdp_disable_irq(term);
 
 		if (mdp_debug[MDP_PPP_BLOCK]) {
@@ -1860,7 +1872,7 @@ static int mdp_off(struct platform_device *pdev)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	if (mdp_rev >= MDP_REV_41 && mfd->panel.type == MIPI_CMD_PANEL)
-		mdp_dsi_cmd_overlay_suspend();
+		mdp_dsi_cmd_overlay_suspend(mfd);
 	return ret;
 }
 
@@ -1873,6 +1885,10 @@ static int mdp_on(struct platform_device *pdev)
 	mdp4_overlay_ctrl_db_reset();
 
 	mfd = platform_get_drvdata(pdev);
+	if (!(mfd->cont_splash_done)) {
+		mfd->cont_splash_done = 1;
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	}
 
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	if (is_mdp4_hw_reset()) {
@@ -2165,6 +2181,10 @@ static int mdp_probe(struct platform_device *pdev)
 #ifdef CONFIG_FB_MSM_OVERLAY
 		mdp_hw_cursor_init();
 #endif
+		/* initialize Post Processing data*/
+		mdp_hist_lut_init();
+		mdp_histogram_init();
+
 		mdp_resource_initialized = 1;
 		return 0;
 	}
@@ -2219,10 +2239,6 @@ static int mdp_probe(struct platform_device *pdev)
 	}
 	mfd->ov0_blt_state  = 0;
 	mfd->use_ov0_blt = 0 ;
-
-	/* initialize Post Processing data*/
-	mdp_hist_lut_init();
-	mdp_histogram_init();
 
 	/* add panel data */
 	if (platform_device_add_data
@@ -2329,6 +2345,8 @@ static int mdp_probe(struct platform_device *pdev)
 		}
 
 #endif
+		mfd->reg_write = mipi_reg_write;
+		mfd->reg_read = mipi_reg_read;
 		if (mdp_rev >= MDP_REV_40)
 			mfd->cursor_update = mdp_hw_cursor_sync_update;
 		else
@@ -2363,6 +2381,8 @@ static int mdp_probe(struct platform_device *pdev)
 			goto mdp_probe_err;
 		}
 #endif
+		mfd->reg_write = mipi_reg_write;
+		mfd->reg_read = mipi_reg_read;
 		mdp_config_vsync(mfd);
 		break;
 #endif

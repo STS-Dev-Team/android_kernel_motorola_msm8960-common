@@ -1434,6 +1434,8 @@ static struct fib6_gc_args
 static int fib6_age(struct rt6_info *rt, void *arg)
 {
 	unsigned long now = jiffies;
+	struct hh_cache *hh;
+	struct neighbour *nn;
 
 	/*
 	 *	check addrconf expiration here.
@@ -1463,6 +1465,25 @@ static int fib6_age(struct rt6_info *rt, void *arg)
 		gc_args.more++;
 	}
 
+	/* check for the dead neighbors */
+	nn = dst_get_neighbour(&rt->dst);
+	if (nn && !(rt->rt6i_flags & RTF_NONEXTHOP) && nn->dead) {
+		hh = rt->dst.hh;
+		if (hh)
+			hh_cache_put(hh);
+
+		rt->dst.hh = NULL;
+		neigh_release(nn);
+
+		dst_set_neighbour(&rt->dst, __neigh_lookup_errno(&nd_tbl,
+							&rt->rt6i_gateway,
+							rt->rt6i_dev));
+		if (IS_ERR(dst_get_neighbour(&rt->dst))) {
+			/* unexpected error. */
+			RT6_TRACE("Fail to flush dead neighbor.\n");
+			dst_set_neighbour(&rt->dst, NULL);
+		}
+	}
 	return 0;
 }
 

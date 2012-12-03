@@ -278,7 +278,8 @@ static struct sysrq_key_op sysrq_showstate_op = {
 
 static void sysrq_handle_showstate_blocked(int key)
 {
-	show_state_filter(TASK_UNINTERRUPTIBLE);
+	show_state_filter(TASK_UNINTERRUPTIBLE,
+		SHOW_KTHREADS | SHOW_APP_THREADS);
 }
 static struct sysrq_key_op sysrq_showstate_blocked_op = {
 	.handler	= sysrq_handle_showstate_blocked,

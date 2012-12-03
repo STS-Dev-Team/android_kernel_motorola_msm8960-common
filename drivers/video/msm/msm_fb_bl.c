@@ -32,7 +32,7 @@ static int msm_fb_bl_update_status(struct backlight_device *pbd)
 	struct msm_fb_data_type *mfd = bl_get_data(pbd);
 	__u32 bl_lvl;
 
-	bl_lvl = pbd->props.brightness;
+	bl_lvl = pbd->props.brightness >> 1;
 	bl_lvl = mfd->fbi->bl_curve[bl_lvl];
 	msm_fb_set_backlight(mfd, bl_lvl);
 	return 0;
@@ -55,15 +55,20 @@ void msm_fb_config_backlight(struct msm_fb_data_type *mfd)
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
 	if ((pdata) && (pdata->set_backlight)) {
-		snprintf(name, sizeof(name), "msmfb_bl%d", mfd->index);
-		props.max_brightness = FB_BACKLIGHT_LEVELS - 1;
-		props.brightness = FB_BACKLIGHT_LEVELS - 1;
+		snprintf(name, sizeof(name), "lcd-backlight");
+		props.max_brightness = FB_BACKLIGHT_MAX;
+		props.brightness = FB_BACKLIGHT_MAX;
+		props.type = BACKLIGHT_RAW;
 		pbd =
 		    backlight_device_register(name, fbi->dev, mfd,
 					      &msm_fb_bl_ops, &props);
 		if (!IS_ERR(pbd)) {
+			pr_info("%s: registered lcd-backlight\n", __func__);
 			fbi->bl_dev = pbd;
-			fb_bl_default_curve(fbi,
+			if(pdata->set_backlight_curve)
+				pdata->set_backlight_curve(mfd);
+			else
+				fb_bl_default_curve(fbi,
 					    0,
 					    mfd->panel_info.bl_min,
 					    mfd->panel_info.bl_max);

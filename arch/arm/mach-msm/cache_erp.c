@@ -59,19 +59,19 @@
 #define L2ESR_CPU_SHIFT		16
 
 #ifdef CONFIG_MSM_L1_ERR_PANIC
-#define ERP_L1_ERR(a) panic(a)
+#define ERP_L1_ERR(a) do { pr_err(a); BUG(); } while (0)
 #else
 #define ERP_L1_ERR(a) do { } while (0)
 #endif
 
 #ifdef CONFIG_MSM_L2_ERP_PORT_PANIC
-#define ERP_PORT_ERR(a) panic(a)
+#define ERP_PORT_ERR(a) do { pr_err(a); BUG(); } while (0)
 #else
 #define ERP_PORT_ERR(a) WARN(1, a)
 #endif
 
 #ifdef CONFIG_MSM_L2_ERP_1BIT_PANIC
-#define ERP_1BIT_ERR(a) panic(a)
+#define ERP_1BIT_ERR(a) do { pr_err(a); BUG(); } while (0)
 #else
 #define ERP_1BIT_ERR(a) do { } while (0)
 #endif
@@ -83,7 +83,7 @@
 #endif
 
 #ifdef CONFIG_MSM_L2_ERP_2BIT_PANIC
-#define ERP_2BIT_ERR(a) panic(a)
+#define ERP_2BIT_ERR(a) do { pr_err(a); BUG(); } while (0)
 #else
 #define ERP_2BIT_ERR(a) do { } while (0)
 #endif
@@ -258,7 +258,8 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 		MSM_SAW1_BASE,
 	};
 
-	if (print_regs) {
+//	if (print_regs) {
+	if (1) {
 		pr_alert("L1 / TLB Error detected on CPU %d!\n", cpu);
 		pr_alert("\tCESR      = 0x%08x\n", cesr);
 		pr_alert("\tCPU speed = %lu\n", acpuclk_get_rate(cpu));
@@ -300,6 +301,7 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 	}
 
 	if (cesr & CESR_TLBMH) {
+		pr_alert("TLB multi-hit error\n");
 		asm ("mcr p15, 0, r0, c8, c7, 0");
 		l1_stats->tlbmh++;
 	}
@@ -458,6 +460,18 @@ static int cache_erp_cpu_callback(struct notifier_block *nfb,
 static struct notifier_block cache_erp_cpu_notifier = {
 	.notifier_call = cache_erp_cpu_callback,
 };
+
+void enable_msm_l2_erp_irq(void)
+{
+	pr_alert("enabling l2 erp interrupt\n");
+	enable_irq(l2_erp_irq);
+}
+
+void disable_msm_l2_erp_irq(void)
+{
+	pr_alert("disabling l2 erp interrupt\n");
+	disable_irq_nosync(l2_erp_irq);
+}
 
 static int msm_cache_erp_probe(struct platform_device *pdev)
 {

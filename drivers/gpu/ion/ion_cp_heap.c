@@ -50,6 +50,9 @@
  * @heap_protected:	Indicates whether heap has been protected or not.
  * @allocated_bytes:	the total number of allocated bytes from the pool.
  * @total_size:	the total size of the memory pool.
+ * @bytes_hwm:	the maximum number of allocated bytes from the pool seen.
+ * @pool_hwm:	the maximum allocation offset in the pool seen.
+ * @alloc_fail_count:	the number of allocation attempts which fail
  * @request_region:	function pointer to call when first mapping of memory
  *			occurs.
  * @release_region:	function pointer to call when last mapping of memory
@@ -80,6 +83,9 @@ struct ion_cp_heap {
 	unsigned int heap_protected;
 	unsigned long allocated_bytes;
 	unsigned long total_size;
+	unsigned long bytes_hwm;
+	unsigned long pool_hwm;
+	unsigned long alloc_fail_count;
 	int (*request_region)(void *);
 	int (*release_region)(void *);
 	void *bus_id;
@@ -200,6 +206,7 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 
 	mutex_lock(&cp_heap->lock);
 	if (!secure_allocation && cp_heap->heap_protected == HEAP_PROTECTED) {
+		cp_heap->alloc_fail_count++;
 		mutex_unlock(&cp_heap->lock);
 		pr_err("ION cannot allocate un-secure memory from protected"
 			" heap %s\n", heap->name);
@@ -208,6 +215,7 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 
 	if (secure_allocation &&
 	    (cp_heap->umap_count > 0 || cp_heap->kmap_cached_count > 0)) {
+		cp_heap->alloc_fail_count++;
 		mutex_unlock(&cp_heap->lock);
 		pr_err("ION cannot allocate secure memory from heap with "
 			"outstanding mappings: User space: %lu, kernel space "
@@ -222,6 +230,7 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 	 */
 	if (cp_heap->reusable && !cp_heap->allocated_bytes) {
 		if (fmem_set_state(FMEM_C_STATE) != 0) {
+			cp_heap->alloc_fail_count++;
 			mutex_unlock(&cp_heap->lock);
 			return ION_RESERVED_ALLOCATE_FAIL;
 		}
@@ -251,10 +260,18 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 				pr_err("%s: unable to transition heap to T-state\n",
 					__func__);
 		}
+		cp_heap->alloc_fail_count++;
 		mutex_unlock(&cp_heap->lock);
 
 		return ION_CP_ALLOCATE_FAIL;
 	}
+
+	mutex_lock(&cp_heap->lock);
+	if (cp_heap->allocated_bytes > cp_heap->bytes_hwm)
+		cp_heap->bytes_hwm = cp_heap->allocated_bytes;
+	if (cp_heap->pool_hwm < (offset + size - cp_heap->base))
+		cp_heap->pool_hwm = (offset + size - cp_heap->base);
+	mutex_unlock(&cp_heap->lock);
 
 	return offset;
 }
@@ -575,6 +592,9 @@ static int ion_cp_print_debug(struct ion_heap *heap, struct seq_file *s)
 {
 	unsigned long total_alloc;
 	unsigned long total_size;
+	unsigned long bytes_hwm;
+	unsigned long pool_hwm;
+	unsigned long alloc_fail_count;
 	unsigned long umap_count;
 	unsigned long kmap_count;
 	unsigned long heap_protected;
@@ -584,6 +604,9 @@ static int ion_cp_print_debug(struct ion_heap *heap, struct seq_file *s)
 	mutex_lock(&cp_heap->lock);
 	total_alloc = cp_heap->allocated_bytes;
 	total_size = cp_heap->total_size;
+	bytes_hwm = cp_heap->bytes_hwm;
+	pool_hwm = cp_heap->pool_hwm;
+	alloc_fail_count = cp_heap->alloc_fail_count;
 	umap_count = cp_heap->umap_count;
 	kmap_count = ion_cp_get_total_kmap_count(cp_heap);
 	heap_protected = cp_heap->heap_protected == HEAP_PROTECTED;
@@ -591,6 +614,9 @@ static int ion_cp_print_debug(struct ion_heap *heap, struct seq_file *s)
 
 	seq_printf(s, "total bytes currently allocated: %lx\n", total_alloc);
 	seq_printf(s, "total heap size: %lx\n", total_size);
+	seq_printf(s, "bytes hwm: %lx\n", bytes_hwm);
+	seq_printf(s, "pool hwm: %lx\n", pool_hwm);
+	seq_printf(s, "alloc failed count: %lx\n", alloc_fail_count);
 	seq_printf(s, "umapping count: %lx\n", umap_count);
 	seq_printf(s, "kmapping count: %lx\n", kmap_count);
 	seq_printf(s, "heap protected: %s\n", heap_protected ? "Yes" : "No");

@@ -124,6 +124,8 @@
 #define PM8XXX_ADC_HWMON_NAME_LENGTH			32
 #define PM8XXX_ADC_BTM_INTERVAL_MAX			0x14
 
+#define PM8XXX_ADC_TIMEOUT                              (5 * HZ)
+
 struct pm8xxx_adc {
 	struct device				*dev;
 	struct pm8xxx_adc_properties		*adc_prop;
@@ -142,9 +144,11 @@ struct pm8xxx_adc {
 	uint32_t				mpp_base;
 	struct device				*hwmon;
 	struct wake_lock			adc_wakelock;
+	struct wake_lock			adc_read_wakelock;
 	int					msm_suspend_check;
 	struct pm8xxx_adc_amux_properties	*conv;
-	struct pm8xxx_adc_arb_btm_param		batt[0];
+	struct pm8xxx_adc_scale_tbl		*scale_tbls;
+	struct pm8xxx_adc_arb_btm_param		batt;
 	struct sensor_device_attribute		sens_attr[0];
 };
 
@@ -454,8 +458,8 @@ static void pm8xxx_adc_btm_warm_scheduler_fn(struct work_struct *work)
 
 	spin_lock_irqsave(&adc_pmic->btm_lock, flags);
 	warm_status = irq_read_line(adc_pmic->btm_warm_irq);
-	if (adc_pmic->batt->btm_warm_fn != NULL)
-		adc_pmic->batt->btm_warm_fn(warm_status);
+	if (adc_pmic->batt.btm_warm_fn != NULL)
+		adc_pmic->batt.btm_warm_fn(warm_status);
 	spin_unlock_irqrestore(&adc_pmic->btm_lock, flags);
 }
 
@@ -468,8 +472,8 @@ static void pm8xxx_adc_btm_cool_scheduler_fn(struct work_struct *work)
 
 	spin_lock_irqsave(&adc_pmic->btm_lock, flags);
 	cool_status = irq_read_line(adc_pmic->btm_cool_irq);
-	if (adc_pmic->batt->btm_cool_fn != NULL)
-		adc_pmic->batt->btm_cool_fn(cool_status);
+	if (adc_pmic->batt.btm_cool_fn != NULL)
+		adc_pmic->batt.btm_cool_fn(cool_status);
 	spin_unlock_irqrestore(&adc_pmic->btm_lock, flags);
 }
 
@@ -676,6 +680,7 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 	struct pm8xxx_adc *adc_pmic = pmic_adc;
 	int i = 0, rc = 0, rc_fail, amux_prescaling, scale_type;
 	enum pm8xxx_adc_premux_mpp_scale_type mpp_scale;
+	struct pm8xxx_adc_scale_tbl *scale_tbl;
 
 	if (!pm8xxx_adc_initialized)
 		return -ENODEV;
@@ -686,6 +691,7 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 	}
 
 	mutex_lock(&adc_pmic->adc_lock);
+	wake_lock(&adc_pmic->adc_read_wakelock);
 
 	for (i = 0; i < adc_pmic->adc_num_board_channel; i++) {
 		if (channel == adc_pmic->adc_channel[i].channel_name)
@@ -734,7 +740,20 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 		goto fail;
 	}
 
-	wait_for_completion(&adc_pmic->adc_rslt_completion);
+	if (!wait_for_completion_timeout(&adc_pmic->adc_rslt_completion,
+					PM8XXX_ADC_TIMEOUT)) {
+		pr_err("%s: ADC timeout rc=%d, channel=%d\n", __func__, rc, channel);
+		if (pm8xxx_adc_configure(adc_pmic->conv)) {
+			pr_err("%s: Reconfigure ADC failed\n", __func__);
+			rc = -EINVAL;
+			goto fail;
+		}
+		if (!wait_for_completion_timeout(&adc_pmic->adc_rslt_completion,
+						 PM8XXX_ADC_TIMEOUT)) {
+			pr_err("%s: timeout again\n", __func__);
+			goto fail;
+		}
+	}
 
 	rc = pm8xxx_adc_read_adc_code(&result->adc_code);
 	if (rc) {
@@ -748,8 +767,14 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 		goto fail;
 	}
 
+	if (adc_pmic->scale_tbls)
+		scale_tbl = &adc_pmic->scale_tbls[scale_type];
+	else
+		scale_tbl = NULL;
+
 	adc_scale_fn[scale_type].chan(result->adc_code,
-			adc_pmic->adc_prop, adc_pmic->conv->chan_prop, result);
+			adc_pmic->adc_prop, adc_pmic->conv->chan_prop, result,
+			scale_tbl);
 
 	rc = pm8xxx_adc_channel_power_enable(channel, false);
 	if (rc) {
@@ -757,6 +782,7 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 		goto fail_unlock;
 	}
 
+	wake_unlock(&adc_pmic->adc_read_wakelock);
 	mutex_unlock(&adc_pmic->adc_lock);
 
 	return 0;
@@ -765,6 +791,7 @@ fail:
 	if (rc_fail)
 		pr_err("pm8xxx adc power disable failed\n");
 fail_unlock:
+	wake_unlock(&adc_pmic->adc_read_wakelock);
 	mutex_unlock(&adc_pmic->adc_lock);
 	pr_err("pm8xxx adc error with %d\n", rc);
 	return rc;
@@ -829,6 +856,7 @@ uint32_t pm8xxx_adc_btm_configure(struct pm8xxx_adc_arb_btm_param *btm_param)
 	u8 arb_btm_cntrl1;
 	unsigned long flags = 0;
 	int rc;
+	struct pm8xxx_adc_scale_tbl *scale_tbl;
 
 	if (adc_pmic == NULL) {
 		pr_err("PMIC ADC not valid\n");
@@ -841,8 +869,14 @@ uint32_t pm8xxx_adc_btm_configure(struct pm8xxx_adc_arb_btm_param *btm_param)
 		return -EINVAL;
 	}
 
+	if (adc_pmic->scale_tbls)
+		scale_tbl = &adc_pmic->scale_tbls[ADC_SCALE_BATT_THERM];
+	else
+		scale_tbl = NULL;
+
 	rc = pm8xxx_adc_batt_scaler(btm_param, adc_pmic->adc_prop,
-					adc_pmic->conv->chan_prop);
+					adc_pmic->conv->chan_prop,
+					scale_tbl);
 	if (rc < 0) {
 		pr_err("Failed to lookup the BTM thresholds\n");
 		return rc;
@@ -872,7 +906,7 @@ uint32_t pm8xxx_adc_btm_configure(struct pm8xxx_adc_arb_btm_param *btm_param)
 		if (rc < 0)
 			goto write_err;
 
-		adc_pmic->batt->btm_cool_fn = btm_param->btm_cool_fn;
+		adc_pmic->batt.btm_cool_fn = btm_param->btm_cool_fn;
 	}
 
 	if (btm_param->btm_warm_fn != NULL) {
@@ -886,7 +920,7 @@ uint32_t pm8xxx_adc_btm_configure(struct pm8xxx_adc_arb_btm_param *btm_param)
 		if (rc < 0)
 			goto write_err;
 
-		adc_pmic->batt->btm_warm_fn = btm_param->btm_warm_fn;
+		adc_pmic->batt.btm_warm_fn = btm_param->btm_warm_fn;
 	}
 
 	rc = pm8xxx_adc_read_reg(PM8XXX_ADC_ARB_BTM_CNTRL1, &arb_btm_cntrl1);
@@ -964,10 +998,10 @@ static uint32_t pm8xxx_adc_btm_read(uint32_t channel)
 	if (rc < 0)
 		goto write_err;
 
-	if (pmic_adc->batt->btm_warm_fn != NULL)
+	if (pmic_adc->batt.btm_warm_fn != NULL)
 		enable_irq(adc_pmic->btm_warm_irq);
 
-	if (pmic_adc->batt->btm_cool_fn != NULL)
+	if (pmic_adc->batt.btm_cool_fn != NULL)
 		enable_irq(adc_pmic->btm_cool_irq);
 
 write_err:
@@ -1151,6 +1185,7 @@ static int __devexit pm8xxx_adc_teardown(struct platform_device *pdev)
 	int i;
 
 	wake_lock_destroy(&adc_pmic->adc_wakelock);
+	wake_lock_destroy(&adc_pmic->adc_read_wakelock);
 	platform_set_drvdata(pdev, NULL);
 	pmic_adc = NULL;
 	if (!pa_therm) {
@@ -1178,7 +1213,6 @@ static int __devinit pm8xxx_adc_probe(struct platform_device *pdev)
 	}
 
 	adc_pmic = devm_kzalloc(&pdev->dev, sizeof(struct pm8xxx_adc) +
-			sizeof(struct pm8xxx_adc_arb_btm_param) +
 			(sizeof(struct sensor_device_attribute) *
 			pdata->adc_num_board_channel), GFP_KERNEL);
 	if (!adc_pmic) {
@@ -1202,6 +1236,7 @@ static int __devinit pm8xxx_adc_probe(struct platform_device *pdev)
 	adc_pmic->adc_channel = pdata->adc_channel;
 	adc_pmic->adc_num_board_channel = pdata->adc_num_board_channel;
 	adc_pmic->mpp_base = pdata->adc_mpp_base;
+	adc_pmic->scale_tbls = pdata->scale_tbls;
 
 	mutex_init(&adc_pmic->adc_lock);
 	mutex_init(&adc_pmic->mpp_adc_lock);
@@ -1255,6 +1290,8 @@ static int __devinit pm8xxx_adc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, adc_pmic);
 	wake_lock_init(&adc_pmic->adc_wakelock, WAKE_LOCK_SUSPEND,
 					"pm8xxx_adc_wakelock");
+	wake_lock_init(&adc_pmic->adc_read_wakelock, WAKE_LOCK_SUSPEND,
+					"pm8xxx_adc_read_wakelock");
 	adc_pmic->msm_suspend_check = 0;
 	pmic_adc = adc_pmic;
 

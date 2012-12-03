@@ -13,13 +13,13 @@ comment "Camera Sensor Selection"
 config MT9T013
 	bool "Sensor mt9t013 (BAYER 3M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !ARCH_MSM8960 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 3M Bayer Sensor with AutoFocus
 config MT9D113
 	bool "Sensor mt9d113 (YUV 2M)"
 	depends on MSM_CAMERA && ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 2M YUV Sensor
 	  This sensor is the front camera on QT8660.
@@ -28,14 +28,27 @@ config MT9D113
 config MT9D112
 	bool "Sensor mt9d112 (YUV 2M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !ARCH_MSM8960 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 2M YUV Sensor
 config IMX074
 	bool "Sensor IMX074 (BAYER 13.5M)"
-	depends on MSM_CAMERA
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
 	---help---
 	SONY 13.5 MP Bayer Sensor
+config MT9M114
+    bool "Sensor MT9M114 (YUV 1.26M)"
+    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+    default n
+    ---help---
+    APTINA 1.26 MP yuv Sensor
+config S5K5B3G
+    bool "Sensor S5K5B3G (BAYER 2MP 1080P)"
+    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+    default n
+    ---help---
+    Samsung 2 MP bayer 1080P Sensor
 config OV5640
 	bool "Sensor OV5640 (YUV 5M)"
 	depends on MSM_CAMERA && !MSM_CAMERA_V4L2
@@ -50,7 +63,7 @@ config WEBCAM_OV7692_QRD
 	  Omni Vision VGA YUV Sensor for QRD Devices
 config MT9M114
         bool "Sensor MT9M114 (YUV 1.26M)"
-        depends on MSM_CAMERA
+        depends on MSM_CAMERA && ARCH_MSM8960
         ---help---
         APTINA 1.26 MP yuv Sensor
 config WEBCAM_OV7692
@@ -69,7 +82,7 @@ config WEBCAM_OV9726
 #	This uses the CSI interface.
 config VX6953
 	bool "Sensor VX6953 (BAYER 5M)"
-	depends on MSM_CAMERA && (ARCH_MSM7X30 || ARCH_MSM8X60)
+	depends on MSM_CAMERA && (ARCH_MSM7X30 || ARCH_MSM8X60) && !MSM_CAMERA_V4L2
 	default y
 	---help---
 	STM 5M Bayer Sensor with EDOF
@@ -119,21 +132,26 @@ config MT9E013
 
 config IMX074_ACT
 	bool "Actuator IMX074 (BAYER 13.5M)"
-	depends on MSM_CAMERA
+	depends on MSM_CAMERA && ARCH_MSM8960
+	default n
 	---help---
 	Actuator for SONY 13.5 MP Bayer Sensor
+
+config DW9714_ACT
+	bool "Actuator OV8820 module (BAYER 8M)"
+	depends on MSM_CAMERA && ARCH_MSM8960
 
 config S5K3E2FX
 	bool "Sensor s5k3e2fx (Samsung 5M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  Samsung 5M with Autofocus
 
 config QS_S5K4E1
 	bool "Sensor qs_s5k4e1 (Samsung 5M)"
 	depends on MSM_CAMERA && ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  Samsung 5M with Autofocus
 
@@ -175,7 +193,22 @@ config IMX072
 
 config OV2720
 	bool "Sensor ov2720 (Omnivision 2MP)"
-	depends on MSM_CAMERA
+	depends on MSM_CAMERA && ARCH_MSM8960
+	default n
+
+config OV8820
+	bool "Sensor ov8820 (Omnivision 8M)"
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
+	---help---
+	Omnivision 8M Bayer Sensor
+
+config OV7736
+	bool "Sensor ov7736 (Omnivision VGA)"
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
+	---help---
+		Omnivision VGA YUV Camera
 
 config VB6801
 	bool "Sensor vb6801"
@@ -186,7 +219,7 @@ config VB6801
 config MSM_CAMERA_FLASH
 	bool "Qualcomm MSM camera flash support"
 	depends on MSM_CAMERA
-	default y
+	default n
 	---help---
 	  Enable support for LED flash for msm camera
 
@@ -223,11 +256,17 @@ config QUP_EXCLUSIVE_TO_CAMERA
 	  by QUP in the board file as QUP is used by
 	  applications other than camera.
 
-config S5K3L1YX
-	bool "Sensor S5K3L1YX (BAYER 12M)"
+
+config MSM_V4L2_VIDEO_OVERLAY_DEVICE
+	tristate "Qualcomm MSM V4l2 video overlay device"
+	---help---
+	  Enables support for the MSM V4L2 video
+	  overlay driver. This allows video rendering
+	  apps to render overlaid video using Video4Linux2
+	  APIs, by using /dev/videoX device
+
+config OV7692
+	bool "Sensor OV7692 (VGA YUV)"
 	depends on MSM_CAMERA
 	---help---
-		Samsung 12 MP Bayer Sensor with auto focus, uses
-		4 mipi lanes, preview config = 1984 * 1508 at 30 fps,
-		snapshot config = 4000 * 3000 at 20 fps,
-		hfr video at 60, 90 and 120 fps.
+		Omni Vision VGA YUV Sensor.

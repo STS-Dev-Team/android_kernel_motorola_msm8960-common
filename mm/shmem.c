@@ -725,7 +725,7 @@ void shmem_truncate_range(struct inode *inode, loff_t start, loff_t end)
 					page_private(subdir) - freed);
 				spin_unlock(&info->lock);
 			} else
-				BUG_ON(page_private(subdir) != freed);
+				WARN_ON(page_private(subdir) != freed);
 		}
 		offset = 0;
 	}

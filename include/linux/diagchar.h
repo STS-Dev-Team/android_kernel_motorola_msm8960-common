@@ -19,10 +19,42 @@
 #define PKT_TYPE			8
 #define DEINIT_TYPE			16
 #define USER_SPACE_LOG_TYPE		32
+
 #define USB_MODE			1
 #define MEMORY_DEVICE_MODE		2
 #define NO_LOGGING_MODE			3
 #define UART_MODE			4
+#define INTERNAL_MODE			5
+#define USB_MODE_NAME			"usb"
+#define MEMORY_DEVICE_MODE_NAME		"memory"
+#define NO_LOGGING_MODE_NAME		"none"
+#define UART_MODE_NAME			"uart"
+#define INTERNAL_MODE_NAME		"internal"
+
+#define USB_DIAG_CONNECT		0
+#define USB_DIAG_DISCONNECT		1
+#define USB_DIAG_WRITE_DONE		2
+#define USB_DIAG_READ_DONE		3
+#define CHANNEL_DIAG_CONNECT		USB_DIAG_CONNECT
+#define CHANNEL_DIAG_DISCONNECT		USB_DIAG_DISCONNECT
+#define CHANNEL_DIAG_WRITE_DONE		USB_DIAG_WRITE_DONE
+#define CHANNEL_DIAG_READ_DONE		USB_DIAG_READ_DONE
+
+struct diag_request {
+	char *buf;
+	int length;
+	int actual;
+	int status;
+	void *context;
+};
+
+struct legacy_diag_ch {
+	const char *name;
+	struct list_head list;
+	void (*notify)(void *priv, unsigned event, struct diag_request *d_req);
+	void *priv;
+	void *priv_channel;
+};
 
 /* different values that go in for diag_data_type */
 #define DATA_TYPE_EVENT         	0
@@ -48,6 +80,7 @@
 #define APQ8030_MACHINE_ID	119
 #define MSM8627_MACHINE_ID	120
 #define MSM8227_MACHINE_ID	121
+#define MSM8660A_MACHINE_ID	122
 #define MSM8260A_MACHINE_ID	123
 #define MSM8974_MACHINE_ID	126
 #define APQ8060_TOOLS_ID	4062
@@ -109,8 +142,8 @@ the appropriate macros. */
 
 /* This needs to be modified manually now, when we add
  a new RANGE of SSIDs to the msg_mask_tbl */
-#define MSG_MASK_TBL_CNT		23
-#define EVENT_LAST_ID			0x083F
+#define MSG_MASK_TBL_CNT		24
+#define EVENT_LAST_ID			0x08AD
 
 #define MSG_SSID_0			0
 #define MSG_SSID_0_LAST			90
@@ -158,6 +191,8 @@ the appropriate macros. */
 #define MSG_SSID_21_LAST		10300
 #define MSG_SSID_22			10350
 #define MSG_SSID_22_LAST		10361
+#define MSG_SSID_23			0xC000
+#define MSG_SSID_23_LAST		0xC063
 
 struct diagpkt_delay_params {
 	void *rsp_ptr;

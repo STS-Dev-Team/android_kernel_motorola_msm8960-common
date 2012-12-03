@@ -1265,6 +1265,18 @@ void wake_up_idle_cpu(int cpu)
 		smp_send_reschedule(cpu);
 }
 
+static inline bool got_nohz_idle_kick(void)
+{
+	return idle_cpu(smp_processor_id()) && this_rq()->nohz_balance_kick;
+}
+
+#else /* CONFIG_NO_HZ */
+
+static inline bool got_nohz_idle_kick(void)
+{
+	return false;
+}
+
 #endif /* CONFIG_NO_HZ */
 
 static u64 sched_avg_period(void)
@@ -2580,7 +2592,7 @@ void scheduler_ipi(void)
 	struct rq *rq = this_rq();
 	struct task_struct *list = xchg(&rq->wake_list, NULL);
 
-	if (!list)
+	if (!list && !got_nohz_idle_kick())
 		return;
 
 	/*
@@ -2598,6 +2610,12 @@ void scheduler_ipi(void)
 	 */
 	irq_enter();
 	sched_ttwu_do_pending(list);
+
+	/*
+	 * Check if someone kicked us for doing the nohz idle load balance.
+	 */
+	if (unlikely(got_nohz_idle_kick() && !need_resched()))
+		raise_softirq_irqoff(SCHED_SOFTIRQ);
 	irq_exit();
 }
 
@@ -5672,6 +5690,13 @@ again:
 		 */
 		if (preempt && rq != p_rq)
 			resched_task(p_rq->curr);
+	} else {
+		/*
+		* We might have set it in task_yield_fair(), but are
+		* not going to schedule(), so don't want to skip
+		* the next update.
+		*/
+		rq->skip_clock_update = 0;
 	}
 
 out:
@@ -5846,7 +5871,7 @@ void sched_show_task(struct task_struct *p)
 	show_stack(p, NULL);
 }
 
-void show_state_filter(unsigned long state_filter)
+void show_state_filter(unsigned long state_filter, unsigned long threads_filter)
 {
 	struct task_struct *g, *p;
 
@@ -5864,20 +5889,23 @@ void show_state_filter(unsigned long state_filter)
 		 * console might take a lot of time:
 		 */
 		touch_nmi_watchdog();
-		if (!state_filter || (p->state & state_filter))
+		if ((!state_filter || (p->state & state_filter)) &&
+			(((threads_filter & SHOW_KTHREADS) && (!p->mm))
+			|| ((threads_filter & SHOW_APP_THREADS) && (p->mm))))
 			sched_show_task(p);
 	} while_each_thread(g, p);
 
 	touch_all_softlockup_watchdogs();
 
 #ifdef CONFIG_SCHED_DEBUG
-	sysrq_sched_debug_show();
+	if ((threads_filter & SHOW_KTHREADS) && (!p->mm))
+		sysrq_sched_debug_show();
 #endif
 	read_unlock(&tasklist_lock);
 	/*
-	 * Only show locks if all tasks are dumped:
+	 * Only show locks if all kernel tasks are dumped:
 	 */
-	if (!state_filter)
+	if ((!state_filter) && (threads_filter & SHOW_KTHREADS) && (!p->mm))
 		debug_show_all_locks();
 }
 
@@ -8123,7 +8151,6 @@ void __init sched_init(void)
 		rq_attach_root(rq, &def_root_domain);
 #ifdef CONFIG_NO_HZ
 		rq->nohz_balance_kick = 0;
-		init_sched_softirq_csd(&per_cpu(remote_sched_softirq_cb, i));
 #endif
 #endif
 		init_rq_hrtick(rq);
@@ -9436,3 +9463,36 @@ struct cgroup_subsys cpuacct_subsys = {
 };
 #endif	/* CONFIG_CGROUP_CPUACCT */
 
+u32 cpu_curr_ptr_addr(int cpu)
+{
+	u32 ret = 0;
+	if (cpu_present(cpu))
+		ret = (unsigned long)&cpu_curr(cpu);
+	return ret;
+}
+
+void show_cpu_current_stack_mem(void)
+{
+	struct rq *rq;
+	struct task_struct *curr;
+	int cpu;
+
+	touch_softlockup_watchdog();
+
+	for_each_possible_cpu(cpu) {
+
+		if (cpu == smp_processor_id())
+			continue;
+
+		rq = cpu_rq(cpu);
+		curr = rq->curr;
+		printk(KERN_DEBUG "++++ CPU%d Current Task(%s,%d) Stack ++++\n",
+					cpu, curr->comm, curr->pid);
+		sched_show_task(curr);
+
+		show_process_mem((unsigned long)curr->stack,
+				 THREAD_SIZE, "stack");
+
+		printk(KERN_DEBUG "\n+++++++++ End of Stack Dump +++++++++++\n");
+	}
+}

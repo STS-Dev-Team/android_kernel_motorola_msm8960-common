@@ -120,6 +120,8 @@ struct msm_sensor_fn_t {
 			uint16_t, uint32_t);
 	int32_t (*sensor_setting) (struct msm_sensor_ctrl_t *,
 			int update_type, int rt);
+	int32_t (*sensor_csi_setting) (struct msm_sensor_ctrl_t *,
+			int update_type, int rt);
 	int32_t (*sensor_set_sensor_mode)
 			(struct msm_sensor_ctrl_t *, int, int);
 	int32_t (*sensor_mode_init) (struct msm_sensor_ctrl_t *,
@@ -133,6 +135,18 @@ struct msm_sensor_fn_t {
 	int32_t (*sensor_match_id)(struct msm_sensor_ctrl_t *s_ctrl);
 	int (*sensor_adjust_frame_lines)
 		(struct msm_sensor_ctrl_t *s_ctrl, uint16_t res);
+	int32_t (*sensor_set_gamma) (struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_sharpening) (struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_lens_shading)
+		(struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_target_exposure)
+		(struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_get_exposure_time)
+		(struct msm_sensor_ctrl_t *, uint32_t *);
+	int32_t (*sensor_get_module_info)
+		(struct msm_sensor_ctrl_t *, struct otp_info_t *);
+	int32_t (*sensor_set_frame_rate_range)
+		(struct msm_sensor_ctrl_t *, struct fps_range_t *);
 };
 
 struct msm_sensor_ctrl_t {
@@ -169,9 +183,6 @@ struct msm_sensor_ctrl_t {
 	uint8_t sensor_v4l2_subdev_info_size;
 	struct v4l2_subdev_ops *sensor_v4l2_subdev_ops;
 	struct msm_sensor_fn_t *func_tbl;
-	struct regulator **reg_ptr;
-	struct clk *cam_clk;
-	long clk_rate;
 };
 
 void msm_sensor_start_stream(struct msm_sensor_ctrl_t *s_ctrl);

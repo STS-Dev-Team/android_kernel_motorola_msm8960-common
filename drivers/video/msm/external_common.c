@@ -17,6 +17,7 @@
 
 /* #define DEBUG */
 #define DEV_DBG_PREFIX "EXT_COMMON: "
+#define SUPPORT_RAW_EDID_READS
 
 #include "msm_fb.h"
 #include "hdmi_msm.h"
@@ -24,6 +25,12 @@
 #include "mhl_api.h"
 
 #include "mdp.h"
+
+#ifdef MSM_FB_US_DVI_SUPPORT
+#define FB_VMODE_MIN_DS     (1 << 31)
+#define FB_VMODE_DVI_AUDIO  (1 << 30)
+static struct hdmi_disp_mode_timing_type us_timing;
+#endif
 
 struct external_common_state_type *external_common_state;
 EXPORT_SYMBOL(external_common_state);
@@ -346,6 +353,40 @@ static ssize_t hdmi_common_rda_edid_modes(struct device *dev,
 	return ret;
 }
 
+#ifdef SUPPORT_RAW_EDID_READS
+/* EDID_BLOCK_SIZE[0x80] Each page size in the EDID ROM */
+static uint8 sysfs_edid[(0x80 * 4)];
+
+static ssize_t hdmi_common_rda_edid_data(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	uint32 ndx, start, end;
+	ssize_t ret = 0;
+	int block;
+
+	/* Return no data if HDMI is not connected */
+	if (!external_common_state->hpd_state)
+		return 0;
+
+	/* Read all 4 Blocks of EDID data */
+	for (block = 0; block < 4; block++) {
+		DEV_DBG("READING EDID BLOCK %d\n", block);
+		start = 0x80 * block;
+		end = start + (0x80 - 1);
+		for (ndx = start; ndx < end; ndx += 8) {
+			ret += snprintf(buf + ret, PAGE_SIZE - ret,
+					"%02x%02x%02x%02x%02x%02x%02x%02x",
+					sysfs_edid[ndx+0], sysfs_edid[ndx+1],
+					sysfs_edid[ndx+2], sysfs_edid[ndx+3],
+					sysfs_edid[ndx+4], sysfs_edid[ndx+5],
+					sysfs_edid[ndx+6], sysfs_edid[ndx+7]);
+		}
+	}
+
+	return ret;
+}
+#endif
+
 static ssize_t hdmi_common_rda_hdcp(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -403,6 +444,69 @@ static ssize_t hdmi_common_wta_hpd(struct device *dev,
 
 	return ret;
 }
+
+#ifdef CONFIG_DEBUG_FS
+static int test_active;
+
+static ssize_t hdmi_common_rda_test(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", test_active);
+}
+
+static ssize_t hdmi_common_wta_test(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long test;
+	int rc;
+
+	rc = strict_strtoul(buf, 0, &test);
+	if (rc || test > 2)
+		return -EINVAL;
+
+	test_active = (int) test;
+
+	DEV_DBG("%s: setting %d\n", __func__, test_active);
+
+	hdmi_msm_test(test_active);
+
+	return count;
+}
+
+static DEVICE_ATTR(test, S_IRUGO | S_IWUGO, hdmi_common_rda_test,
+					    hdmi_common_wta_test);
+#endif
+
+#ifdef SUPPORT_HDCP_ENABLE_VIA_SYSFS
+static ssize_t hdmi_common_rda_hdcp_en(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			external_common_state->hdcp_enable);
+}
+
+static ssize_t hdmi_common_wta_hdcp_en(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long en;
+	boolean flag;
+	int rc;
+
+	rc = strict_strtoul(buf, 0, &en);
+	if (rc || en > 2)
+		return -EINVAL;
+
+	flag = (en) ? TRUE : FALSE;
+
+	if (external_common_state->update_hdcp_enable)
+		external_common_state->update_hdcp_enable(flag);
+
+	return count;
+}
+
+static DEVICE_ATTR(hdcp_en, S_IRUGO | S_IWUGO, hdmi_common_rda_hdcp_en,
+					       hdmi_common_wta_hdcp_en);
+#endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
 /*
@@ -699,6 +803,9 @@ static DEVICE_ATTR(connected, S_IRUGO, external_common_rda_connected, NULL);
 static DEVICE_ATTR(hdmi_mode, S_IRUGO, external_common_rda_hdmi_mode, NULL);
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
 static DEVICE_ATTR(edid_modes, S_IRUGO, hdmi_common_rda_edid_modes, NULL);
+#ifdef SUPPORT_RAW_EDID_READS
+static DEVICE_ATTR(edid_data, S_IRUGO, hdmi_common_rda_edid_data, NULL);
+#endif
 static DEVICE_ATTR(hpd, S_IRUGO | S_IWUGO, hdmi_common_rda_hpd,
 	hdmi_common_wta_hpd);
 static DEVICE_ATTR(hdcp, S_IRUGO, hdmi_common_rda_hdcp, NULL);
@@ -717,11 +824,17 @@ static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_connected.attr,
 	&dev_attr_hdmi_mode.attr,
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
+#ifdef SUPPORT_RAW_EDID_READS
+	&dev_attr_edid_data.attr,
+#endif
 	&dev_attr_edid_modes.attr,
 	&dev_attr_hdcp.attr,
 	&dev_attr_hpd.attr,
 	&dev_attr_3d_present.attr,
 	&dev_attr_hdcp_present.attr,
+#ifdef SUPPORT_HDCP_ENABLE_VIA_SYSFS
+	&dev_attr_hdcp_en.attr,
+#endif
 #endif
 #ifdef CONFIG_FB_MSM_HDMI_3D
 	&dev_attr_format_3d.attr,
@@ -732,6 +845,9 @@ static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_cec_rd_frame.attr,
 	&dev_attr_cec_wr_frame.attr,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT */
+#ifdef CONFIG_DEBUG_FS
+	&dev_attr_test.attr,
+#endif
 	&dev_attr_hdmi_primary.attr,
 	NULL,
 };
@@ -1394,6 +1510,9 @@ int hdmi_common_read_edid(void)
 			status,
 			edid_buf[0], edid_buf[1], edid_buf[2], edid_buf[3],
 			edid_buf[4], edid_buf[5], edid_buf[6], edid_buf[7]);
+			external_common_state->hdmi_sink = false;
+			DEV_DBG("HDMI DVI mode: %s\n",
+				external_common_state->hdmi_sink ? "no" : "yes");
 		goto error;
 	}
 	hdmi_edid_extract_vendor_id(edid_buf, vendor_id);
@@ -1415,6 +1534,12 @@ int hdmi_common_read_edid(void)
 		if (status) {
 			DEV_ERR("%s: ddc read block(1) failed: %d\n", __func__,
 				status);
+			ieee_reg_id =
+				hdmi_edid_extract_ieee_reg_id(edid_buf+0x80);
+			if (ieee_reg_id == 0x0c03)
+				external_common_state->hdmi_sink = TRUE ;
+			else
+				external_common_state->hdmi_sink = FALSE ;
 			goto error;
 		}
 		if (edid_buf[0x80] != 2)
@@ -1482,6 +1607,10 @@ int hdmi_common_read_edid(void)
 	hdmi_edid_get_display_mode(edid_buf,
 		&external_common_state->disp_mode_list, num_og_cea_blocks);
 
+#ifdef SUPPORT_RAW_EDID_READS
+	memcpy(sysfs_edid, edid_buf, (0x80 * 4));
+#endif
+
 	return 0;
 
 error:
@@ -1498,7 +1627,45 @@ bool hdmi_common_get_video_format_from_drv_data(struct msm_fb_data_type *mfd)
 	struct fb_var_screeninfo *var = &mfd->fbi->var;
 	bool changed = TRUE;
 
+#ifdef MSM_FB_US_DVI_SUPPORT
+	uint32 new_pix_freq = mfd->var_pixclock / 1000;
+	bool us_timing_changed = false;
+
+	external_common_state->min_ds = 0;
+	if (var->reserved[3] == HDMI_VFRMT_US_TIMING) {
+		us_timing_changed = ((us_timing.active_h != mfd->var_xres) ||
+				     (us_timing.active_v != mfd->var_yres) ||
+				     (us_timing.pixel_freq != new_pix_freq)
+				     ) ? true : false;
+		format = HDMI_VFRMT_US_TIMING;
+		us_timing.video_format  = format;
+		us_timing.active_h      = mfd->var_xres;
+		us_timing.front_porch_h = mfd->var_right_margin;
+		us_timing.pulse_width_h = mfd->var_hsync_len;
+		us_timing.back_porch_h  = mfd->var_left_margin;
+		us_timing.active_low_h  =
+			(mfd->var_sync & FB_SYNC_HOR_HIGH_ACT) ? 0 : 1;
+		us_timing.active_v      = mfd->var_yres;
+		us_timing.front_porch_v = mfd->var_lower_margin;
+		us_timing.pulse_width_v = mfd->var_vsync_len;
+		us_timing.back_porch_v  = mfd->var_upper_margin;
+		us_timing.active_low_v  =
+			(mfd->var_sync & FB_SYNC_VERT_HIGH_ACT) ? 0 : 1;
+		us_timing.pixel_freq    = new_pix_freq;
+		us_timing.refresh_rate  = 60000; /* Just hack */
+		us_timing.interlaced    =
+			(mfd->var_vmode & FB_VMODE_INTERLACED) ? 1 : 0;
+		us_timing.supported     = true;
+		external_common_state->dvi_audio =
+			(mfd->var_vmode & FB_VMODE_DVI_AUDIO) ? true : false;
+		external_common_state->min_ds =
+			(mfd->var_vmode & FB_VMODE_MIN_DS) ? true : false;
+	} else if (var->reserved[3]) {
+		external_common_state->min_ds =
+			(mfd->var_vmode & FB_VMODE_MIN_DS) ? true : false;
+#else
 	if (var->reserved[3]) {
+#endif
 		format = var->reserved[3]-1;
 		DEV_DBG("reserved format is %d\n", format);
 	} else {
@@ -1529,6 +1696,11 @@ bool hdmi_common_get_video_format_from_drv_data(struct msm_fb_data_type *mfd)
 	}
 
 	changed = external_common_state->video_resolution != format;
+#ifdef MSM_FB_US_DVI_SUPPORT
+	if (!changed && format == HDMI_VFRMT_US_TIMING)
+		changed = us_timing_changed;
+#endif
+
 	if (external_common_state->video_resolution != format)
 		DEV_DBG("switching %s => %s", video_format_2string(
 			external_common_state->video_resolution),
@@ -1543,6 +1715,11 @@ EXPORT_SYMBOL(hdmi_common_get_video_format_from_drv_data);
 
 const struct hdmi_disp_mode_timing_type *hdmi_common_get_mode(uint32 mode)
 {
+#ifdef MSM_FB_US_DVI_SUPPORT
+	if (mode == HDMI_VFRMT_US_TIMING)
+		return &us_timing;
+#endif
+
 	if (mode >= HDMI_VFRMT_MAX)
 		return NULL;
 

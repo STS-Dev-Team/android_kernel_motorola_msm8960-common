@@ -19,4 +19,6 @@ struct ram_console_platform_data {
 	const char *bootinfo;
 };
 
+int __init ram_console_ext_oldbuf_print(const char *fmt, ...);
+
 #endif /* _INCLUDE_LINUX_PLATFORM_DATA_RAM_CONSOLE_H_ */

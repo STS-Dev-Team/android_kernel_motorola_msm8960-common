@@ -90,6 +90,21 @@ void __init call_function_init(void)
 	register_cpu_notifier(&hotplug_cfd_notifier);
 }
 
+DEFINE_PER_CPU(int, csd_lock_waiting_flag);
+
+int is_csd_lock_waiting(void)
+{
+	return __get_cpu_var(csd_lock_waiting_flag);
+}
+static void set_csd_lock_waiting_flag(void)
+{
+	__get_cpu_var(csd_lock_waiting_flag) = 1;
+}
+static void clear_csd_lock_waiting_flag(void)
+{
+	__get_cpu_var(csd_lock_waiting_flag) = 0;
+}
+
 /*
  * csd_lock/csd_unlock used to serialize access to per-cpu csd resources
  *
@@ -99,8 +114,12 @@ void __init call_function_init(void)
  */
 static void csd_lock_wait(struct call_single_data *data)
 {
+	set_csd_lock_waiting_flag();
+
 	while (data->flags & CSD_FLAG_LOCK)
 		cpu_relax();
+
+	clear_csd_lock_waiting_flag();
 }
 
 static void csd_lock(struct call_single_data *data)
@@ -127,6 +146,7 @@ static void csd_unlock(struct call_single_data *data)
 
 	data->flags &= ~CSD_FLAG_LOCK;
 }
+
 
 /*
  * Insert a previously allocated call_single_data element

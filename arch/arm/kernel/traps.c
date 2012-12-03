@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/sched.h>
+#include <linux/nmi.h>
 
 #include <asm/atomic.h>
 #include <asm/cacheflush.h>
@@ -232,8 +233,13 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 {
 	struct task_struct *tsk = thread->task;
 	static int die_counter;
+#ifdef CONFIG_DEBUG_THREAD_INFO
+	unsigned long thread_addr;
+	unsigned long task_addr;
+#endif
 	int ret;
 
+	atomic_notifier_call_chain(&touch_watchdog_notifier_head, 0, NULL);
 	printk(KERN_EMERG "Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n",
 	       str, err, ++die_counter);
 
@@ -248,6 +254,15 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 		TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), thread + 1);
 
 	if (!user_mode(regs) || in_interrupt()) {
+#ifdef CONFIG_DEBUG_THREAD_INFO
+		thread_addr = regs->ARM_sp & ~(THREAD_SIZE - 1);
+		dump_mem(KERN_EMERG, "thread_info:", thread_addr,
+			thread_addr + sizeof(struct thread_info));
+		if (__get_user(task_addr,
+			(unsigned long *)(thread_addr + 0xc)) == 0)
+			dump_mem(KERN_EMERG, "task_struct:", task_addr,
+				task_addr + sizeof(struct task_struct));
+#endif
 		dump_mem(KERN_EMERG, "Stack: ", regs->ARM_sp,
 			 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
 		dump_backtrace(regs, tsk);
@@ -267,10 +282,11 @@ void die(const char *str, struct pt_regs *regs, int err)
 	struct thread_info *thread = current_thread_info();
 	int ret;
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
+	unsigned long flags;
 
 	oops_enter();
 
-	raw_spin_lock_irq(&die_lock);
+	raw_spin_lock_irqsave(&die_lock, flags);
 	console_verbose();
 	bust_spinlocks(1);
 	if (!user_mode(regs))
@@ -284,13 +300,13 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
-	raw_spin_unlock_irq(&die_lock);
-	oops_exit();
 
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
+	raw_spin_unlock_irqrestore(&die_lock, flags);
+	oops_exit();
 	if (ret != NOTIFY_STOP)
 		do_exit(SIGSEGV);
 }
@@ -721,6 +737,17 @@ baddataabort(int code, unsigned long instr, struct pt_regs *regs)
 
 	arm_notify_die("unknown data abort code", regs, &info, instr, 0);
 }
+
+void __attribute__((noreturn)) __bug(const char *file, int line)
+{
+	printk(KERN_CRIT"kernel BUG at %s:%d!\n", file, line);
+	*(int *)0 = 0;
+
+	/* Avoid "noreturn function does return" */
+	for (;;)
+	;
+}
+EXPORT_SYMBOL(__bug);
 
 void __readwrite_bug(const char *fn)
 {

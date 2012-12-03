@@ -60,7 +60,9 @@ struct page *ecryptfs_get_locked_page(struct inode *inode, loff_t index)
  */
 static int ecryptfs_writepage(struct page *page, struct writeback_control *wbc)
 {
-	int rc;
+	struct inode *ecryptfs_inode;
+	struct ecryptfs_crypt_stat *crypt_stat;
+	int rc = 0;
 
 	/*
 	 * Refuse to write the page out if we are called from reclaim context
@@ -74,14 +76,27 @@ static int ecryptfs_writepage(struct page *page, struct writeback_control *wbc)
 		goto out;
 	}
 
-	rc = ecryptfs_encrypt_page(page);
-	if (rc) {
-		ecryptfs_printk(KERN_WARNING, "Error encrypting "
+	ecryptfs_inode = page->mapping->host;
+	crypt_stat =
+		&(ecryptfs_inode_to_private(ecryptfs_inode)->crypt_stat);
+
+	if (!crypt_stat
+	    || !(crypt_stat->flags & ECRYPTFS_ENCRYPTED)) {
+		ecryptfs_printk(KERN_DEBUG,
+				"Passing through unencrypted page\n");
+		rc = ecryptfs_write_lower_page_segment(ecryptfs_inode, page,
+			0, PAGE_CACHE_SIZE);
+	} else {
+		rc = ecryptfs_encrypt_page(page);
+		if (rc)
+			ecryptfs_printk(KERN_ERR, "Error encrypting "
 				"page (upper index [0x%.16lx])\n", page->index);
-		ClearPageUptodate(page);
-		goto out;
 	}
-	SetPageUptodate(page);
+
+	if (rc)
+		ClearPageUptodate(page);
+	else
+		SetPageUptodate(page);
 out:
 	unlock_page(page);
 	return rc;

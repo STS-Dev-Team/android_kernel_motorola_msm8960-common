@@ -27,7 +27,7 @@ msm_adreno-y += \
 	adreno_a2xx_snapshot.o \
 	adreno.o
 
-msm_adreno-$(CONFIG_DEBUG_FS) += adreno_debugfs.o
+msm_adreno-y += adreno_debugfs.o
 
 msm_z180-y += \
 	z180.o \

@@ -12,6 +12,31 @@
 
 #include "msm_camera_i2c.h"
 
+#ifdef LOG_I2C
+static void log_buf(bool tx, unsigned char *buf, int len)
+{
+	char lbuf[200];
+	char bbuf[4];
+	int i;
+
+	if (buf == 0 || len == 0)
+		return;
+
+	lbuf[0] = 0;
+	if (tx)
+		strncat(lbuf, "TX:", 4);
+	else
+		strncat(lbuf, "RX:", 4);
+
+	for (i = 0; i < len; i++) {
+		snprintf(bbuf, 4, " %02X", buf[i]);
+		strncat(lbuf, bbuf, 4);
+	}
+	pr_info("I2C: %s", lbuf);
+
+}
+#endif
+
 int32_t msm_camera_i2c_rxdata(struct msm_camera_i2c_client *dev_client,
 	unsigned char *rxdata, int data_length)
 {
@@ -50,7 +75,35 @@ int32_t msm_camera_i2c_txdata(struct msm_camera_i2c_client *dev_client,
 			.buf = txdata,
 		 },
 	};
-	rc = i2c_transfer(dev_client->client->adapter, msg, 1);
+	/* TODO - checking for FFFF/FFFE is a hack to work around limitations
+	 * in vendor code.  Remove hack if cleaner solution is provided.
+	 * - FFFF: vendor code insists on updating sensor window size, even if
+	 *   not appropriate. Setting the window size registers to FFFF
+	 *   prevents updates.
+	 * - FFFE: vendor code provides no mechanism for delays inside i2c
+	 *   sequences; however, they are necessary.  Using register FFFE
+	 *   provides a means to specify a delay.
+	 */
+	if (txdata[0] == 0xFF && txdata[1] == 0xFF) {
+#ifdef LOG_I2C
+		pr_info("I2C: ignored transaction\n");
+#endif
+	} else if (txdata[0] == 0xFF && txdata[1] == 0xFE) {
+		unsigned char sleep = txdata[2];
+#ifdef LOG_I2C
+		pr_info("I2C: sleep %d ms\n", sleep);
+#endif
+		if (sleep > 20)
+			msleep(sleep);
+		else
+			usleep_range(sleep*1000, (sleep+1)*1000);
+	} else {
+#ifdef LOG_I2C
+		log_buf(1, txdata, length);
+#endif
+		rc = i2c_transfer(dev_client->client->adapter, msg, 1);
+	}
+
 	if (rc < 0)
 		S_I2C_DBG("msm_camera_i2c_txdata faild 0x%x\n", saddr);
 	return 0;

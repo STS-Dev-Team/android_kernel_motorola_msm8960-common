@@ -23,7 +23,11 @@
 #include "a2xx_reg.h"
 
 unsigned int kgsl_cff_dump_enable;
+
+#ifdef CONFIG_DEBUG_FS
+
 int kgsl_pm_regs_enabled;
+int adreno_ib_dump_on_pagef_enabled;
 
 static struct dentry *pm_d_debugfs;
 
@@ -60,6 +64,21 @@ DEFINE_SIMPLE_ATTRIBUTE(pm_regs_enabled_fops,
 			pm_regs_enabled_get,
 			pm_regs_enabled_set, "%llu\n");
 
+static int ib_dump_on_pagef_enabled_get(void *data, u64 *val)
+{
+	*val = adreno_ib_dump_on_pagef_enabled;
+	return 0;
+}
+
+static int ib_dump_on_pagef_enabled_set(void *data, u64 val)
+{
+	adreno_ib_dump_on_pagef_enabled = val ? 1 : 0;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(ib_dump_on_pagef_enabled_fops,
+			ib_dump_on_pagef_enabled_get,
+			ib_dump_on_pagef_enabled_set, "%llu\n");
 
 static int kgsl_cff_dump_enable_set(void *data, u64 val)
 {
@@ -359,4 +378,9 @@ void adreno_debugfs_init(struct kgsl_device *device)
 			    &pm_dump_fops);
 	debugfs_create_file("regs_enabled", 0644, pm_d_debugfs, device,
 			    &pm_regs_enabled_fops);
+
+	debugfs_create_file("ib_dump_on_pagefault", 0644, device->d_debugfs,
+				device, &ib_dump_on_pagef_enabled_fops);
 }
+
+#endif /* CONFIG_DEBUG_FS */

@@ -32,19 +32,41 @@ struct keyreset_state {
 	int key_down_target;
 	int key_down;
 	int key_up;
+	struct timer_list timer;
 	int restart_disabled;
+	int delay;
 	int (*reset_fn)(void);
 };
 
 int restart_requested;
+int crash_requested;
+
 static void deferred_restart(struct work_struct *dummy)
 {
 	restart_requested = 2;
 	sys_sync();
 	restart_requested = 3;
-	kernel_restart(NULL);
+	BUG();
 }
 static DECLARE_WORK(restart_work, deferred_restart);
+
+static void keyreset_timer(unsigned long data)
+{
+	struct keyreset_state *state = (struct keyreset_state *) data;
+	if (restart_requested)
+		panic("keyboard reset failed, %d", restart_requested);
+	printk(KERN_EMERG "current process is %d:%s, prio is %d.\n",
+		current->pid, current->comm, current->prio);
+	dump_stack();
+
+	if (state->reset_fn) {
+		restart_requested = state->reset_fn();
+	} else {
+		pr_info("keyboard reset\n");
+		schedule_work(&restart_work);
+		restart_requested = 1;
+	}
+}
 
 static void keyreset_event(struct input_handle *handle, unsigned int type,
 			   unsigned int code, int value)
@@ -57,6 +79,7 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 
 	if (code >= KEY_MAX)
 		return;
+
 
 	if (!test_bit(code, state->keybit))
 		return;
@@ -86,16 +109,11 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 	if (value && !state->restart_disabled &&
 	    state->key_down == state->key_down_target) {
 		state->restart_disabled = 1;
-		if (restart_requested)
-			panic("keyboard reset failed, %d", restart_requested);
-		if (state->reset_fn) {
-			restart_requested = state->reset_fn();
-		} else {
-			pr_info("keyboard reset\n");
-			schedule_work(&restart_work);
-			restart_requested = 1;
-		}
-	}
+		mod_timer(&state->timer, jiffies +
+			msecs_to_jiffies(state->delay));
+	} else
+		del_timer(&state->timer);
+
 done:
 	spin_unlock_irqrestore(&state->lock, flags);
 }
@@ -195,7 +213,12 @@ static int keyreset_probe(struct platform_device *pdev)
 
 	if (pdata->reset_fn)
 		state->reset_fn = pdata->reset_fn;
-
+	if (pdata->delay) 
+		state->delay = pdata->delay;
+	else
+		state->delay =3000;
+	setup_timer(&state->timer, keyreset_timer,
+		    (unsigned long)state);
 	state->input_handler.event = keyreset_event;
 	state->input_handler.connect = keyreset_connect;
 	state->input_handler.disconnect = keyreset_disconnect;

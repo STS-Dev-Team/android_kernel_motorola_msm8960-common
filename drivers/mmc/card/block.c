@@ -842,6 +842,11 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 	struct mmc_card *card = md->queue.card;
 	struct mmc_blk_request brq;
 	int ret = 1, disable_multi = 0, retry = 0;
+	/*
+	 * The max timeout value is 10s for the worst case we know
+	 * so wait max 10s
+	 */
+	u32 timeout = 100000;
 
 	/*
 	 * Reliable writes are used to implement Forced Unit Access and
@@ -1010,6 +1015,7 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 		 */
 		if (!mmc_host_is_spi(card->host) && rq_data_dir(req) != READ) {
 			u32 status;
+			int busy;
 			do {
 				int err = get_card_status(card, &status, 5);
 				if (err) {
@@ -1022,8 +1028,21 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 				 * so make sure to check both the busy
 				 * indication and the card state.
 				 */
-			} while (!(status & R1_READY_FOR_DATA) ||
-				 (R1_CURRENT_STATE(status) == R1_STATE_PRG));
+				busy = !(status & R1_READY_FOR_DATA) ||
+					(R1_CURRENT_STATE(status) == R1_STATE_PRG);
+				if (busy) {
+					timeout--;
+					udelay(100);
+				}
+			} while (busy && timeout > 0);
+		}
+
+		if ((mmc_card_sd(card)) && !timeout) {
+			pr_err("%s: Bad sdcard, removed it please!!!",
+				req->rq_disk->disk_name);
+			set_bit(BDI_removing, &md->disk->queue->backing_dev_info.state);
+			req->cmd_flags |= REQ_QUIET;
+			goto cmd_abort;
 		}
 
 		if (brq.data.error) {
@@ -1475,6 +1494,7 @@ static void mmc_blk_remove(struct mmc_card *card)
 {
 	struct mmc_blk_data *md = mmc_get_drvdata(card);
 
+	set_bit(BDI_removing, &md->disk->queue->backing_dev_info.state);
 	mmc_blk_remove_parts(card, md);
 	mmc_claim_host(card->host);
 	mmc_blk_part_switch(card, md);

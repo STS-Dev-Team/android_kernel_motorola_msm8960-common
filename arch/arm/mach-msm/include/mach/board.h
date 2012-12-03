@@ -172,6 +172,10 @@ enum msm_camera_type {
 	BACK_CAMERA_INT_3D,
 };
 
+struct msm8960_privacy_light_cfg {
+	unsigned mpp;
+};
+
 enum camera_vreg_type {
 	REG_LDO,
 	REG_VS,
@@ -185,30 +189,34 @@ struct camera_vreg_t {
 	int op_mode;
 };
 
-struct msm_gpio_set_tbl {
-	unsigned gpio;
-	unsigned long flags;
-	uint32_t delay;
+struct msm_camera_sensor_platform_info {
+	int mount_angle;
+	int use_cam_vana;
+	int use_cam_vio;
+	int use_cam_vdig;
+	int use_cam_vaf;
+	int sensor_reset_enable;
+	int sensor_reset;
+	int sensor_pwd;
+	int analog_en;
+	bool ana_en_inv;
+	int digital_en;
+	bool dig_en_inv;
+	char *reg_1p2;
+	char *reg_1p8;
+	char *reg_2p8;
+	int vcm_pwd;
+	int vcm_enable;
+	int privacy_light;
+	void *privacy_light_info;
+	int mclk_freq;
 };
 
 struct msm_camera_gpio_conf {
 	void *cam_gpiomux_conf_tbl;
 	uint8_t cam_gpiomux_conf_tbl_size;
-	struct gpio *cam_gpio_common_tbl;
-	uint8_t cam_gpio_common_tbl_size;
-	struct gpio *cam_gpio_req_tbl;
-	uint8_t cam_gpio_req_tbl_size;
-	struct msm_gpio_set_tbl *cam_gpio_set_tbl;
-	uint8_t cam_gpio_set_tbl_size;
-};
-
-struct msm_camera_sensor_platform_info {
-	int mount_angle;
-	int sensor_reset;
-	struct camera_vreg_t *cam_vreg;
-	int num_vreg;
-	int32_t (*ext_power_ctrl) (int enable);
-	struct msm_camera_gpio_conf *gpio_conf;
+	uint16_t *cam_gpio_tbl;
+	uint8_t cam_gpio_tbl_size;
 };
 
 struct msm_actuator_info {
@@ -220,6 +228,10 @@ struct msm_actuator_info {
 
 struct msm_camera_sensor_info {
 	const char *sensor_name;
+	int use_cam_vana;
+	int use_cam_vio;
+	int use_cam_vdig;
+	int use_cam_vaf;
 	int sensor_reset_enable;
 	int sensor_reset;
 	int sensor_pwd;
@@ -236,6 +248,7 @@ struct msm_camera_sensor_info {
 	struct msm_camera_csi_params csi_params;
 	struct msm_camera_sensor_strobe_flash_data *strobe_flash_data;
 	char *eeprom_data;
+	struct msm_camera_gpio_conf *gpio_conf;
 	enum msm_camera_type camera_type;
 	struct msm_actuator_info *actuator_info;
 };
@@ -371,6 +384,8 @@ struct mddi_platform_data {
 struct mipi_dsi_platform_data {
 	int vsync_gpio;
 	int (*dsi_power_save)(int on);
+	int (*panel_power_save)(int on);
+	int(*panel_power_force_off)(int on);
 	int (*dsi_client_reset)(void);
 	int (*get_lane_config)(void);
 	int target_type;
@@ -396,7 +411,6 @@ struct mipi_dsi_panel_platform_data {
 	int *gpio;
 	struct mipi_dsi_phy_ctrl *phy_ctrl_settings;
 	void (*dsi_pwm_cfg)(void);
-	char dlane_swap;
 };
 
 #define PANEL_NAME_MAX_LEN 50
@@ -404,6 +418,8 @@ struct msm_fb_platform_data {
 	int (*detect_client)(const char *name);
 	int mddi_prescan;
 	int (*allow_set_offset)(void);
+	u32 fb_xpad;
+	u32 fb_ypad;
 	char prim_panel_name[PANEL_NAME_MAX_LEN];
 	char ext_panel_name[PANEL_NAME_MAX_LEN];
 };
@@ -417,6 +433,9 @@ struct msm_hdmi_platform_data {
 	int (*cec_power)(int on);
 	int (*init_irq)(void);
 	bool (*check_hdcp_hw_support)(void);
+#ifdef CONFIG_DEBUG_FS
+	void (*test)(int en);
+#endif
 };
 
 struct msm_i2c_platform_data {
@@ -447,6 +466,7 @@ struct msm_vidc_platform_data {
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *vidc_bus_client_pdata;
 #endif
+	int disable_turbo;
 };
 
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)

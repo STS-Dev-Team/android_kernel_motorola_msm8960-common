@@ -12,6 +12,8 @@
 
 #include "msm_actuator.h"
 
+static uint8_t lens_mode;
+
 int32_t msm_actuator_write_focus(
 	struct msm_actuator_ctrl_t *a_ctrl,
 	uint16_t curr_lens_pos,
@@ -72,6 +74,11 @@ int32_t msm_actuator_move_focus(
 		dir,
 		num_steps);
 
+	if (lens_mode) {
+		pr_info("%s - Test Mode X", __func__);
+		return rc;
+	}
+
 	/* Determine sign direction */
 	if (dir == MOVE_NEAR)
 		sign_dir = 1;
@@ -81,6 +88,10 @@ int32_t msm_actuator_move_focus(
 		pr_err("Illegal focus direction\n");
 		rc = -EINVAL;
 		return rc;
+	}
+	if (NULL == a_ctrl->step_position_table) {
+		pr_err("%s: Invalid step_postion_table\n", __func__);
+		return -EINVAL;
 	}
 
 	/* Determine destination step position */
@@ -150,6 +161,17 @@ int32_t msm_actuator_move_focus(
 	return rc;
 }
 
+int32_t msm_actuator_set_lens_mode(
+	struct msm_actuator_ctrl_t *a_ctrl,
+	uint8_t mode)
+{
+	int32_t rc = 0;
+
+	pr_info("set lens mode %d", mode);
+	lens_mode = mode;
+
+	return rc;
+}
 int32_t msm_actuator_init_table(
 	struct msm_actuator_ctrl_t *a_ctrl)
 {
@@ -160,6 +182,8 @@ int32_t msm_actuator_init_table(
 	uint16_t step_boundary = 0;
 	LINFO("%s called\n", __func__);
 
+	lens_mode = 0;
+
 	if (a_ctrl->func_tbl.actuator_set_params)
 		a_ctrl->func_tbl.actuator_set_params(a_ctrl);
 
@@ -167,6 +191,10 @@ int32_t msm_actuator_init_table(
 	a_ctrl->step_position_table =
 		kmalloc(sizeof(uint16_t) * (a_ctrl->set_info.total_steps + 1),
 			GFP_KERNEL);
+	if (NULL == a_ctrl->step_position_table) {
+		pr_err("%s: step_postion_table memory alloc fail\n", __func__);
+		return -EINVAL;
+	}
 	cur_code = a_ctrl->initial_code;
 	a_ctrl->step_position_table[step_index++] = cur_code;
 	for (region_index = 0;
@@ -210,9 +238,16 @@ int32_t msm_actuator_set_default_focus(
 	int32_t rc = 0;
 	LINFO("%s called\n", __func__);
 
-	if (!a_ctrl->step_position_table)
-		a_ctrl->func_tbl.actuator_init_table(a_ctrl);
+	if (lens_mode) {
+		pr_info("%s - Test Mode X", __func__);
+		return rc;
+	}
 
+	if (!a_ctrl->step_position_table) {
+		rc = a_ctrl->func_tbl.actuator_init_table(a_ctrl);
+		if (rc < 0)
+			return rc;
+	}
 	if (a_ctrl->curr_step_pos != 0)
 		rc = a_ctrl->func_tbl.actuator_move_focus(a_ctrl, MOVE_FAR,
 			a_ctrl->curr_step_pos);
@@ -238,6 +273,7 @@ int32_t msm_actuator_af_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 		LINFO("%s after msm_actuator_set_default_focus\n", __func__);
 	}
 	kfree(a_ctrl->step_position_table);
+	a_ctrl->step_position_table = NULL;
 	return rc;
 }
 
@@ -281,6 +317,21 @@ int32_t msm_actuator_config(
 			cdata.cfg.move.num_steps);
 		if (rc < 0)
 			LERROR("%s move focus failed %d\n", __func__, rc);
+		break;
+
+	case CFG_SET_LENS_MODE:
+		rc = a_ctrl->func_tbl.actuator_set_lens_mode(a_ctrl,
+			cdata.cfg.lens_mode);
+		if (rc < 0)
+			LERROR("%s move focus failed %d\n", __func__, rc);
+		break;
+
+	case CFG_GET_CUR_LENS_POS:
+		cdata.cfg.cur_lens_pos = a_ctrl->curr_step_pos;
+		if (copy_to_user((void *)argp,
+				 &cdata,
+				 sizeof(struct msm_actuator_cfg_data)))
+			rc = -EFAULT;
 		break;
 
 	default:

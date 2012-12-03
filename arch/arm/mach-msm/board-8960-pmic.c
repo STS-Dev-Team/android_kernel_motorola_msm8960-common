@@ -419,6 +419,7 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.warm_bat_voltage	= 4100,
 	.thermal_mitigation	= pm8921_therm_mitigation,
 	.thermal_levels		= ARRAY_SIZE(pm8921_therm_mitigation),
+	.rconn_mohm		= 18,
 };
 
 static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
@@ -426,11 +427,13 @@ static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 };
 
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
+	.battery_type	= BATT_UNKNOWN,
 	.r_sense		= 10,
 	.i_test			= 2500,
 	.v_failure		= 3000,
 	.calib_delay_ms		= 600000,
 	.max_voltage_uv		= MAX_VOLTAGE_MV * 1000,
+	.rconn_mohm		= 30,
 };
 
 #define	PM8921_LC_LED_MAX_CURRENT	4	/* I = 4mA */
@@ -585,5 +588,11 @@ void __init msm8960_init_pmic(void)
 	if (machine_is_msm8960_liquid()) {
 		pm8921_platform_data.keypad_pdata = &keypad_data_liquid;
 		pm8921_platform_data.leds_pdata = &pm8xxx_leds_pdata_liquid;
+		pm8921_platform_data.bms_pdata->battery_type = BATT_DESAY;
+	} else if (machine_is_msm8960_mtp()) {
+		pm8921_platform_data.bms_pdata->battery_type = BATT_PALLADIUM;
 	}
+
+	if (machine_is_msm8960_fluid())
+		pm8921_bms_pdata.rconn_mohm = 20;
 }

@@ -33,6 +33,7 @@
 #include <mach/subsystem_restart.h>
 
 #include "smd_private.h"
+#include "restart.h"
 
 struct subsys_soc_restart_order {
 	const char * const *subsystem_list;
@@ -239,6 +240,9 @@ module_param(max_restarts, int, 0644);
 static long max_history_time = 3600;
 module_param(max_history_time, long, 0644);
 
+static int modem_restart_count = 0;
+module_param(modem_restart_count, int, 0644);
+
 static void do_epoch_check(struct subsys_data *subsys)
 {
 	int n = 0;
@@ -287,10 +291,12 @@ static void do_epoch_check(struct subsys_data *subsys)
 
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
-				max_history_time_check)
-			panic("Subsystems have crashed %d times in less than "
+				max_history_time_check) {
+			pr_err("Subsystems have crashed %d times in less than "
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
+			BUG();
+		}
 	}
 
 out:
@@ -346,9 +352,11 @@ static int subsystem_restart_thread(void *data)
 	 * sequence for these subsystems. In the latter case, panic and bail
 	 * out, since a subsystem died in its powerup sequence.
 	 */
-	if (!mutex_trylock(powerup_lock))
-		panic("%s[%p]: Subsystem died during powerup!",
+	if (!mutex_trylock(powerup_lock)) {
+		pr_err("%s[%p]: Subsystem died during powerup!",
 						__func__, current);
+		BUG();
+	}
 
 	do_epoch_check(subsys);
 
@@ -373,9 +381,11 @@ static int subsystem_restart_thread(void *data)
 		pr_info("[%p]: Shutting down %s\n", current,
 			restart_list[i]->name);
 
-		if (restart_list[i]->shutdown(subsys) < 0)
-			panic("subsys-restart: %s[%p]: Failed to shutdown %s!",
+		if (restart_list[i]->shutdown(subsys) < 0) {
+			pr_err("subsys-restart: %s[%p]: Failed to shutdown %s!",
 				__func__, current, restart_list[i]->name);
+			BUG();
+		}
 	}
 
 	_send_notification_to_order(restart_list, restart_list_count,
@@ -412,9 +422,11 @@ static int subsystem_restart_thread(void *data)
 		pr_info("[%p]: Powering up %s\n", current,
 					restart_list[i]->name);
 
-		if (restart_list[i]->powerup(subsys) < 0)
-			panic("%s[%p]: Failed to powerup %s!", __func__,
+		if (restart_list[i]->powerup(subsys) < 0) {
+			pr_err("%s[%p]: Failed to powerup %s!", __func__,
 				current, restart_list[i]->name);
+			BUG();
+		}
 	}
 
 	_send_notification_to_order(restart_list,
@@ -447,6 +459,18 @@ int subsystem_restart(const char *subsys_name)
 
 	pr_info("Restart sequence requested for %s, restart_level = %d.\n",
 		subsys_name, restart_level);
+
+#ifdef TEMP_BP_APR_NOTIF
+	if (!strncmp("modem", subsys_name, strnlen("modem",
+		SUBSYS_NAME_MAX_LENGTH))) {
+		pr_info("BP panic notify enabled\n");
+		set_in_bp_panic();
+	}
+#endif
+
+	/* Increase restart count, later AP RIL can know the system
+	ever meet BP silent reboot, or NOT */
+	modem_restart_count++;
 
 	/* List of subsystems is protected by a lock. New subsystems can
 	 * still come in.
@@ -490,19 +514,23 @@ int subsystem_restart(const char *subsys_name)
 		 */
 		tsk = kthread_run(subsystem_restart_thread, data,
 				"subsystem_restart_thread");
-		if (IS_ERR(tsk))
-			panic("%s: Unable to create thread to restart %s",
+		if (IS_ERR(tsk)) {
+			pr_err("%s: Unable to create thread to restart %s",
 				__func__, subsys->name);
+			BUG();
+		}
 
 		break;
 
 	case RESET_SOC:
-		panic("subsys-restart: Resetting the SoC - %s crashed.",
+		pr_err("subsys-restart: Resetting the SoC - %s crashed.",
 			subsys->name);
+		BUG();
 		break;
 
 	default:
-		panic("subsys-restart: Unknown restart level!\n");
+		pr_err("subsys-restart: Unknown restart level!\n");
+		BUG();
 	break;
 
 	}
@@ -594,7 +622,7 @@ static int __init subsys_restart_init(void)
 {
 	int ret = 0;
 
-	restart_level = RESET_SOC;
+	restart_level = RESET_SUBSYS_INDEPENDENT;
 
 	ret = ssr_init_soc_restart_orders();
 

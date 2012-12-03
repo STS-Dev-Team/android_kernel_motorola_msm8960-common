@@ -28,6 +28,7 @@
 #include <asm/uaccess.h>
 #include <asm/setup.h>
 
+#include "board-mmi.h"
 #include "peripheral-loader.h"
 
 struct pil_device {
@@ -73,6 +74,7 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 	char fw_name[30];
 	const struct firmware *fw = NULL;
 	const u8 *data;
+	char fw_name_ver[8] = "";
 
 	if (memblock_is_region_memory(phdr->p_paddr, phdr->p_memsz)) {
 		dev_err(pil->desc->dev, "Kernel memory would be overwritten");
@@ -80,8 +82,14 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 	}
 
 	if (phdr->p_filesz) {
-		snprintf(fw_name, ARRAY_SIZE(fw_name), "%s.b%02d",
-				pil->desc->name, num);
+		if (!strcmp("dsps", pil->desc->name)) {
+			msm8960_get_dsps_fw_name(fw_name_ver);
+			snprintf(fw_name, sizeof(fw_name), "%s%s.b%02d",
+					pil->desc->name, fw_name_ver, num);
+		} else
+			snprintf(fw_name, sizeof(fw_name), "%s.b%02d",
+					pil->desc->name, num);
+
 		ret = request_firmware(&fw, fw_name, pil->desc->dev);
 		if (ret) {
 			dev_err(pil->desc->dev, "Failed to locate blob %s\n",
@@ -168,9 +176,16 @@ static int load_image(struct pil_device *pil)
 	struct elf32_hdr *ehdr;
 	const struct elf32_phdr *phdr;
 	const struct firmware *fw;
+	char fw_name_ver[8] = "";
 
 	down_read(&pil_pm_rwsem);
-	snprintf(fw_name, sizeof(fw_name), "%s.mdt", pil->desc->name);
+	if (!strcmp("dsps", pil->desc->name)) {
+		msm8960_get_dsps_fw_name(fw_name_ver);
+		snprintf(fw_name, sizeof(fw_name), "%s%s.mdt",
+			pil->desc->name, fw_name_ver);
+	} else
+		snprintf(fw_name, sizeof(fw_name), "%s.mdt", pil->desc->name);
+
 	ret = request_firmware(&fw, fw_name, pil->desc->dev);
 	if (ret) {
 		dev_err(pil->desc->dev, "Failed to locate %s\n", fw_name);

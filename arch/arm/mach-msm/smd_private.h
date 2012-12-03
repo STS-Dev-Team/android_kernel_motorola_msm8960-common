@@ -208,4 +208,19 @@ extern spinlock_t smem_lock;
 
 void smd_diag(void);
 
+#define BARCODE_MAX_LEN 64
+#define MACHINE_MAX_LEN 32
+#define CARRIER_MAX_LEN 64
+#define BASEBAND_MAX_LEN 96
+struct mmi_unit_info_v1 {
+	uint32_t version;
+	uint32_t system_rev;
+	uint32_t system_serial_low;
+	uint32_t system_serial_high;
+	char machine[MACHINE_MAX_LEN+1];
+	char barcode[BARCODE_MAX_LEN+1];
+	char carrier[CARRIER_MAX_LEN+1];
+	char baseband[BASEBAND_MAX_LEN+1];
+};
+
 #endif

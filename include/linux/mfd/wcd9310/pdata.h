@@ -127,6 +127,7 @@ struct tabla_pdata {
 	struct tabla_micbias_setting micbias;
 	struct tabla_ocp_setting ocp;
 	struct wcd9310_regulator regulator[MAX_REGULATOR];
+	int hs_detect_gpio_enable;
 };
 
 #endif

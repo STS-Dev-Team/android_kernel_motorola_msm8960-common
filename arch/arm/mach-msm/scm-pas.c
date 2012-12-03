@@ -28,6 +28,31 @@
 #define PAS_SHUTDOWN_CMD	6
 #define PAS_IS_SUPPORTED_CMD	7
 
+
+static void print_hab_fail_codes(void)
+{
+	struct {
+		int mot_cmd;
+		int parm1;
+		int parm2;
+		int parm3;
+	} my_cmd;
+
+	u32 *shared_mem;
+
+	shared_mem = kmalloc(16, GFP_KERNEL);
+	my_cmd.mot_cmd = 9;
+	my_cmd.parm1 = 16;
+	my_cmd.parm2 = virt_to_phys(shared_mem);
+
+	scm_call(254, 1, &my_cmd, sizeof(my_cmd), NULL, 0);
+
+	pr_err("HAB fail codes: 0x%x 0x%x 0x%x 0x%x\n",
+	shared_mem[0], shared_mem[1], shared_mem[2], shared_mem[3]);
+
+	kfree(shared_mem);
+}
+
 int pas_init_image(enum pas_id id, const u8 *metadata, size_t size)
 {
 	int ret;
@@ -49,8 +74,11 @@ int pas_init_image(enum pas_id id, const u8 *metadata, size_t size)
 			sizeof(request), &scm_ret, sizeof(scm_ret));
 	kfree(mdata_buf);
 
-	if (ret)
+	if (ret) {
+		print_hab_fail_codes();
 		return ret;
+	}
+
 	return scm_ret;
 }
 EXPORT_SYMBOL(pas_init_image);

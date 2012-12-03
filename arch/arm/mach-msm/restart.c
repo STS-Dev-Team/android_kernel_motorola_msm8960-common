@@ -34,6 +34,7 @@
 #include <mach/scm.h>
 #include "msm_watchdog.h"
 #include "timer.h"
+#include "restart.h"
 
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
@@ -53,8 +54,8 @@ void *restart_reason;
 int pmic_reset_irq;
 static void __iomem *msm_tmr0_base;
 
-#ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
+#ifdef CONFIG_MSM_DLOAD_MODE
 static void *dload_mode_addr;
 
 /* Download mode master kill-switch */
@@ -62,7 +63,7 @@ static int dload_set(const char *val, struct kernel_param *kp);
 static int download_mode = 1;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
-
+#endif
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
@@ -73,7 +74,7 @@ static int panic_prep_restart(struct notifier_block *this,
 static struct notifier_block panic_blk = {
 	.notifier_call	= panic_prep_restart,
 };
-
+#ifdef CONFIG_MSM_DLOAD_MODE
 static void set_dload_mode(int on)
 {
 	if (dload_mode_addr) {
@@ -108,6 +109,21 @@ static int dload_set(const char *val, struct kernel_param *kp)
 #define set_dload_mode(x) do {} while (0)
 #endif
 
+#ifdef TEMP_BP_APR_NOTIF
+/*
+Short term change to enable BP APR notification to be updated when RAM dump
+transfer time is acceptable for user-trial.
+Flag will be set during subsystem reset of modem
+DLOAD mode is not needed for this to work & it should still work if enabled
+*/
+static int in_bp_panic;
+
+void set_in_bp_panic(void)
+{
+	in_bp_panic = 1;
+}
+#endif
+
 void msm_set_restart_mode(int mode)
 {
 	restart_mode = mode;
@@ -122,6 +138,7 @@ static void __msm_power_off(int lower_pshold)
 #endif
 	pm8xxx_reset_pwr_off(0);
 
+	pr_crit("Before PSHOLD_CTL_SU lower_pshold=%d\n", lower_pshold);
 	if (lower_pshold) {
 		__raw_writel(0, PSHOLD_CTL_SU);
 		mdelay(10000);
@@ -210,18 +227,33 @@ void arch_reset(char mode, const char *cmd)
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
 			__raw_writel(0x6f656d00 | code, restart_reason);
+		} else if (!strncmp(cmd, "mbm_proto_ver_mismatch", 22)) {
+			__raw_writel(0x77665503, restart_reason);
+		} else if (!strncmp(cmd, "outofcharge", 11)) {
+			__raw_writel(0x77665504, restart_reason);
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else if (in_panic == 1) {
+		__raw_writel(0x77665505, restart_reason);
+	} else {
+		__raw_writel(0x77665501, restart_reason);
 	}
+#ifdef TEMP_BP_APR_NOTIF
+	if (in_bp_panic)
+		__raw_writel(0x77665506, restart_reason);
+#endif
 
 	__raw_writel(0, msm_tmr0_base + WDT0_EN);
 	if (!(machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa())) {
+		pr_crit("Before actually reset the chip, restart_reason=0x%x\n",
+			__raw_readl(restart_reason));
 		mb();
 		__raw_writel(0, PSHOLD_CTL_SU); /* Actually reset the chip */
 		mdelay(5000);
 		pr_notice("PS_HOLD didn't work, falling back to watchdog\n");
 	}
+	__raw_writel(0, restart_reason);
 
 	__raw_writel(1, msm_tmr0_base + WDT0_RST);
 	__raw_writel(5*0x31F3, msm_tmr0_base + WDT0_BARK_TIME);
@@ -236,12 +268,12 @@ static int __init msm_restart_init(void)
 {
 	int rc;
 
-#ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+#ifdef CONFIG_MSM_DLOAD_MODE
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
 
 	/* Reset detection is switched on below.*/
-	set_dload_mode(1);
+	set_dload_mode(download_mode);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();
 	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;

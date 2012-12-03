@@ -34,6 +34,7 @@
 #include "clock-voter.h"
 #include "clock-dss-8960.h"
 #include "devices.h"
+#include "board-8960.h"
 
 #define REG(off)	(MSM_CLK_CTL_BASE + (off))
 #define REG_MM(off)	(MSM_MMSS_CLK_CTL_BASE + (off))
@@ -1381,6 +1382,18 @@ static CLK_GSBI_UART(gsbi10_uart, 10, CLK_HALT_CFPB_STATEB_REG,  2);
 static CLK_GSBI_UART(gsbi11_uart, 11, CLK_HALT_CFPB_STATEC_REG, 17);
 static CLK_GSBI_UART(gsbi12_uart, 12, CLK_HALT_CFPB_STATEC_REG, 13);
 
+int __init msm_gsbi12_uart_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_uart_clk.c;
+	return 0;
+}
+
+int __init msm_gsbi4_uart_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi4_uart_clk.c;
+	return 0;
+}
+
 #define CLK_GSBI_QUP(i, n, h_r, h_b) \
 	struct rcg_clk i##_clk = { \
 		.b = { \
@@ -1439,6 +1452,12 @@ static CLK_GSBI_QUP(gsbi9_qup,   9, CLK_HALT_CFPB_STATEB_REG,  4);
 static CLK_GSBI_QUP(gsbi10_qup, 10, CLK_HALT_CFPB_STATEB_REG,  0);
 static CLK_GSBI_QUP(gsbi11_qup, 11, CLK_HALT_CFPB_STATEC_REG, 15);
 static CLK_GSBI_QUP(gsbi12_qup, 12, CLK_HALT_CFPB_STATEC_REG, 11);
+
+int __init msm_gsbi12_qup_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_qup_clk.c;
+	return 0;
+}
 
 #define F_PDM(f, s, d) \
 	{ \
@@ -2236,6 +2255,12 @@ static struct branch_clk gsbi12_p_clk = {
 		CLK_INIT(gsbi12_p_clk.c),
 	},
 };
+
+int __init msm_gsbi12_p_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_p_clk.c;
+	return 0;
+}
 
 static struct branch_clk sata_phy_cfg_clk = {
 	.b = {
@@ -3904,7 +3929,14 @@ static struct clk_freq_tbl clk_tbl_tv[] = {
 	F_TV( 25200000, hdmi_pll,  25200000, 1, 0, 0),
 	F_TV( 27000000, hdmi_pll,  27000000, 1, 0, 0),
 	F_TV( 27030000, hdmi_pll,  27030000, 1, 0, 0),
+	F_TV( 40000000, hdmi_pll,  40000000, 1, 0, 0),
+	F_TV( 65000000, hdmi_pll,  65000000, 1, 0, 0),
+	F_TV( 69290000, hdmi_pll,  69290000, 1, 0, 0),
+	F_TV( 72000000, hdmi_pll,  72000000, 1, 0, 0),
 	F_TV( 74250000, hdmi_pll,  74250000, 1, 0, 0),
+	F_TV(106500000, hdmi_pll, 106500000, 1, 0, 0),
+	F_TV(108000000, hdmi_pll, 108000000, 1, 0, 0),
+	F_TV(119000000, hdmi_pll, 119000000, 1, 0, 0),
 	F_TV(148500000, hdmi_pll, 148500000, 1, 0, 0),
 	F_END
 };
@@ -4618,8 +4650,10 @@ static struct measure_sel measure_mux[] = {
 	{ TEST_PER_HS(0x07), &afab_a_clk.c },
 	{ TEST_PER_HS(0x18), &sfab_clk.c },
 	{ TEST_PER_HS(0x18), &sfab_a_clk.c },
+#ifdef CONFIG_DEBUG_FS
 	{ TEST_PER_HS(0x26), &q6sw_clk },
 	{ TEST_PER_HS(0x27), &q6fw_clk },
+#endif
 	{ TEST_PER_HS(0x2A), &adm0_clk.c },
 	{ TEST_PER_HS(0x34), &ebi1_clk.c },
 	{ TEST_PER_HS(0x34), &ebi1_a_clk.c },
@@ -4715,11 +4749,13 @@ static struct measure_sel measure_mux[] = {
 	{ TEST_LPA(0x14), &pcm_clk.c },
 	{ TEST_LPA(0x1D), &audio_slimbus_clk.c },
 
+#ifdef CONFIG_DEBUG_FS
 	{ TEST_LPA_HS(0x00), &q6_func_clk },
 
 	{ TEST_CPUL2(0x2), &l2_m_clk },
 	{ TEST_CPUL2(0x0), &krait0_m_clk },
 	{ TEST_CPUL2(0x1), &krait1_m_clk },
+#endif
 };
 
 static struct measure_sel *find_measure_sel(struct clk *clk)
@@ -5142,9 +5178,11 @@ static struct clk_lookup msm_clocks_8064[] = {
 
 	CLK_LOOKUP("mem_clk",		ebi1_adm_clk.c, "msm_dmov"),
 
+#ifdef CONFIG_DEBUG_FS
 	CLK_LOOKUP("l2_mclk",		l2_m_clk,     NULL),
 	CLK_LOOKUP("krait0_mclk",	krait0_m_clk, NULL),
 	CLK_LOOKUP("krait1_mclk",	krait1_m_clk, NULL),
+#endif
 };
 
 static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
@@ -5191,7 +5229,7 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("core_clk",		gsbi9_uart_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi10_uart_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi11_uart_clk.c,	NULL),
-	CLK_LOOKUP("core_clk",		gsbi12_uart_clk.c,	NULL),
+	CLK_LOOKUP("core_clk",		gsbi12_uart_clk.c,      NULL),
 	CLK_LOOKUP("core_clk",		gsbi1_qup_clk.c,	"spi_qsd.0"),
 	CLK_LOOKUP("core_clk",		gsbi2_qup_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi3_qup_clk.c,	"qup_i2c.3"),
@@ -5234,6 +5272,7 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("iface_clk",		gsbi2_p_clk.c,		NULL),
 	CLK_LOOKUP("iface_clk",		gsbi3_p_clk.c,		"qup_i2c.3"),
 	CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,		"qup_i2c.4"),
+	CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,	"msm_serial_hs.1"),
 	CLK_LOOKUP("iface_clk",		gsbi5_p_clk.c,	"msm_serial_hsl.0"),
 	CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,  "msm_serial_hs.0"),
 	CLK_LOOKUP("iface_clk",		gsbi7_p_clk.c,		NULL),
@@ -5241,7 +5280,7 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("iface_clk",		gsbi9_p_clk.c,		NULL),
 	CLK_LOOKUP("iface_clk",		gsbi10_p_clk.c,		"qup_i2c.10"),
 	CLK_LOOKUP("iface_clk",		gsbi11_p_clk.c,		NULL),
-	CLK_LOOKUP("iface_clk",		gsbi12_p_clk.c,		"qup_i2c.12"),
+	CLK_LOOKUP("iface_clk",		gsbi12_p_clk.c,         "qup_i2c.12"),
 	CLK_LOOKUP("iface_clk",		tsif_p_clk.c,		NULL),
 	CLK_LOOKUP("iface_clk",		usb_fs1_p_clk.c,	NULL),
 	CLK_LOOKUP("iface_clk",		usb_fs2_p_clk.c,	NULL),
@@ -5260,8 +5299,10 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("core_clk",		amp_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-001a"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-006c"),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0048"),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0020"),
+	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-0048"),
+	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0036"),
+	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-003c"),
+	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-0020"),
 	CLK_LOOKUP("csi_src_clk",	csi0_src_clk.c,		"msm_csid.0"),
 	CLK_LOOKUP("csi_src_clk",	csi1_src_clk.c,		"msm_csid.1"),
 	CLK_LOOKUP("csi_clk",		csi0_clk.c,		"msm_csid.0"),
@@ -5398,12 +5439,14 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("bus_clk",		dfab_qseecom_clk.c,	"qseecom"),
 	CLK_LOOKUP("mem_clk",		ebi1_adm_clk.c, "msm_dmov"),
 
+#ifdef CONFIG_DEBUG_FS
 	CLK_LOOKUP("l2_mclk",		l2_m_clk,     NULL),
 	CLK_LOOKUP("krait0_mclk",	krait0_m_clk, NULL),
 	CLK_LOOKUP("krait1_mclk",	krait1_m_clk, NULL),
 	CLK_LOOKUP("q6sw_clk",		q6sw_clk, NULL),
 	CLK_LOOKUP("q6fw_clk",		q6fw_clk, NULL),
 	CLK_LOOKUP("q6_func_clk",	q6_func_clk, NULL),
+#endif
 };
 
 static struct clk_lookup msm_clocks_8960_v2[] __initdata = {
@@ -5421,6 +5464,13 @@ static struct clk_lookup msm_clocks_8960_v2[] __initdata = {
 	CLK_LOOKUP("core_clk",	      usb_hsic_system_clk.c,   "msm_hsic_host"),
 	CLK_LOOKUP("iface_clk",	      usb_hsic_p_clk.c,        "msm_hsic_host"),
 };
+
+int __init msm_clocks_8960_v1_info(struct clk_lookup **ptr, int *num_lookups)
+{
+	*ptr = msm_clocks_8960_v1;
+	*num_lookups = ARRAY_SIZE(msm_clocks_8960_v1);
+	return 0;
+}
 
 /* Add v2 clocks dynamically at runtime */
 static struct clk_lookup msm_clocks_8960[ARRAY_SIZE(msm_clocks_8960_v1) +
@@ -5764,6 +5814,16 @@ static void __init msm8960_clock_init(void)
 	gfx2d1_clk.freq_tbl = kmemdup(clk_tbl_gfx2d,
 			sizeof(struct clk_freq_tbl) * ARRAY_SIZE(clk_tbl_gfx2d),
 			GFP_KERNEL);
+
+	if (camera_single_mclk) {
+		int i;
+		pr_info("using cam0_clk for all cameras\n");
+		for (i = 0; i < num_lookups; i++) {
+			const char *con_id = msm_clocks_8960_v1[i].con_id;
+			if (con_id && !memcmp(con_id, "cam_clk", 7))
+				msm_clocks_8960_v1[i].clk = &cam0_clk.c;
+		}
+	}
 
 	xo_pxo = msm_xo_get(MSM_XO_PXO, "clock-8960");
 	if (IS_ERR(xo_pxo)) {

@@ -355,5 +355,11 @@ void set_rate_mnd_8(struct rcg_clk *clk, struct clk_freq_tbl *nf);
 void set_rate_mnd_banked(struct rcg_clk *clk, struct clk_freq_tbl *nf);
 void set_rate_div_banked(struct rcg_clk *clk, struct clk_freq_tbl *nf);
 
+extern int msm_gsbi12_uart_clk_ptr(struct clk **ptr);
+extern int msm_gsbi12_qup_clk_ptr(struct clk **ptr);
+extern int msm_gsbi12_p_clk_ptr(struct clk **ptr);
+extern int msm_gsbi4_uart_clk_ptr(struct clk **ptr);
+extern int msm_clocks_8960_v1_info(struct clk_lookup **ptr, int *num_lookups);
+
 #endif /* __ARCH_ARM_MACH_MSM_CLOCK_LOCAL_H */
 

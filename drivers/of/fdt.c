@@ -24,6 +24,35 @@
 
 #include <asm/page.h>
 
+#ifdef CONFIG_OF_FLATTREE_HOST_BYTEORDER
+/*
+ * HACK: Historically, Motorola products used little endian device trees.
+ */
+#ifdef be32
+#undef be32
+#endif
+
+#define be32		u32
+
+#ifdef be32_to_cpu
+#undef be32_to_cpu
+#endif
+
+#define be32_to_cpu(n)	(n)
+
+#ifdef be32_to_cpup
+#undef be32_to_cpup
+#endif
+
+#define be32_to_cpup(p)	(*(p))
+
+#ifdef cpu_to_be32
+#undef cpu_to_be32
+#endif
+
+#define cpu_to_be32(n)	(n)
+#endif
+
 char *of_fdt_get_string(struct boot_param_header *blob, u32 offset)
 {
 	return ((char *)blob) +

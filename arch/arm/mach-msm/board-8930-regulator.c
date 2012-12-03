@@ -30,9 +30,10 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("8038_l2",		NULL),
 	REGULATOR_SUPPLY("iris_vdddig",		"wcnss_wlan.0"),
 	REGULATOR_SUPPLY("dsi_vdda",		"mipi_dsi.1"),
-	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.0"),
-	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.1"),
-	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.2"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-001a"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-006c"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-0048"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",        "4-0020"),
 };
 VREG_CONSUMERS(L3) = {
 	REGULATOR_SUPPLY("8038_l3",		NULL),
@@ -66,8 +67,6 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0048"),
-	REGULATOR_SUPPLY("cam_vana",            "4-0020"),
-	REGULATOR_SUPPLY("cam_vaf",             "4-0020"),
 };
 VREG_CONSUMERS(L10) = {
 	REGULATOR_SUPPLY("8038_l10",		NULL),
@@ -84,7 +83,6 @@ VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("cam_vdig",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-0048"),
-	REGULATOR_SUPPLY("cam_vdig",            "4-0020"),
 };
 VREG_CONSUMERS(L14) = {
 	REGULATOR_SUPPLY("8038_l14",		NULL),
@@ -104,7 +102,6 @@ VREG_CONSUMERS(L18) = {
 	REGULATOR_SUPPLY("cam_vio",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vio",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vio",		"4-0048"),
-	REGULATOR_SUPPLY("cam_vio",             "4-0020"),
 };
 VREG_CONSUMERS(L19) = {
 	REGULATOR_SUPPLY("8038_l19",		NULL),

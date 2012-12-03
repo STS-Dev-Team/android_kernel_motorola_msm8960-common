@@ -134,8 +134,13 @@ struct page *kmap_atomic_to_page(const void *ptr)
 	unsigned long vaddr = (unsigned long)ptr;
 	pte_t *pte;
 
-	if (vaddr < FIXADDR_START)
-		return virt_to_page(ptr);
+	if (vaddr < FIXADDR_START) {
+		if (vaddr >= PKMAP_ADDR(0) &&
+			vaddr < PKMAP_ADDR(LAST_PKMAP))
+			return pte_page(pkmap_page_table[PKMAP_NR(vaddr)]);
+		else
+			return virt_to_page(ptr);
+	}
 
 	pte = TOP_PTE(vaddr);
 	return pte_page(*pte);

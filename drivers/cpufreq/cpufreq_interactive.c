@@ -52,6 +52,7 @@ struct cpufreq_interactive_cpuinfo {
 	u64 floor_validate_time;
 	u64 hispeed_validate_time;
 	int governor_enabled;
+	unsigned long time_to_run;
 };
 
 static DEFINE_PER_CPU(struct cpufreq_interactive_cpuinfo, cpuinfo);
@@ -78,6 +79,10 @@ static unsigned long go_hispeed_load;
  */
 #define DEFAULT_MIN_SAMPLE_TIME (80 * USEC_PER_MSEC)
 static unsigned long min_sample_time;
+
+/* idle_cancel_timer set to 1 means that we won't run the timer when idle */
+#define DEFAULT_IDLE_CANCEL_TIMER 1
+static unsigned long idle_cancel_timer;
 
 /*
  * The sample rate of the timer used to increase frequency
@@ -322,6 +327,26 @@ static void cpufreq_interactive_idle_start(void)
 	smp_wmb();
 	pending = timer_pending(&pcpu->cpu_timer);
 
+	if (idle_cancel_timer) {
+		/* idle is almost always less expensive than governing, let's
+		   delay governing decisions until we exit idle. */
+		if (pending) {
+			/* Reset the timer to the current expiration after we
+			 * return from idle.  This is effectively pausing the
+			 * timer while we're in the idle path, so that it's not
+			 * counted against the power collapse state entry
+			 * criteria.
+			 */
+			pcpu->time_to_run = pcpu->cpu_timer.expires;
+			del_timer(&pcpu->cpu_timer);
+		} else {
+			/* Start the timer after we wake up */
+			pcpu->time_to_run = jiffies +
+						usecs_to_jiffies(timer_rate);
+		}
+		return;
+	}
+
 	if (pcpu->target_freq != pcpu->policy->min) {
 #ifdef CONFIG_SMP
 		/*
@@ -369,6 +394,26 @@ static void cpufreq_interactive_idle_end(void)
 	pcpu->idling = 0;
 	smp_wmb();
 
+	if (idle_cancel_timer) {
+		/* Restart the timer after exiting idle */
+		if (timer_pending(&pcpu->cpu_timer) == 0 &&
+		    pcpu->governor_enabled) {
+			/* Don't set a timer in the past, if it goes too far it
+			 * would be in the future.
+			*/
+			unsigned long now = jiffies;
+			unsigned long time_to_run =
+				time_after(pcpu->time_to_run, now) ?
+					pcpu->time_to_run : now;
+			if (!pcpu->idle_exit_time)
+				/* Start computing the load anew. */
+				pcpu->time_in_idle =
+				get_cpu_idle_time_us(smp_processor_id(),
+					&pcpu->idle_exit_time);
+			mod_timer(&pcpu->cpu_timer, time_to_run);
+		}
+		return;
+	}
 	/*
 	 * Arm the timer for 1-2 ticks later if not already, and if the timer
 	 * function has already processed the previous load sampling
@@ -426,10 +471,12 @@ static int cpufreq_interactive_up_task(void *data)
 			pcpu = &per_cpu(cpuinfo, cpu);
 			smp_rmb();
 
-			if (!pcpu->governor_enabled)
-				continue;
-
 			mutex_lock(&set_speed_lock);
+
+			if (!pcpu->governor_enabled) {
+				mutex_unlock(&set_speed_lock);
+				continue;
+			}
 
 			for_each_cpu(j, pcpu->policy->cpus) {
 				struct cpufreq_interactive_cpuinfo *pjcpu =
@@ -801,6 +848,47 @@ static ssize_t store_boostpulse(struct kobject *kobj, struct attribute *attr,
 static struct global_attr boostpulse =
 	__ATTR(boostpulse, 0200, NULL, store_boostpulse);
 
+static ssize_t store_idle_cancel_timer(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buf, size_t count)
+{
+	int ret, i;
+	unsigned long val;
+
+	ret = strict_strtoul(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+	idle_cancel_timer = !!val;
+
+	/*
+	 * Initalize per-cpu time-to-run after exit idle, for
+	 * the case where an offline/idle CPU gets switched
+	 * into idle_cancel_timer=1 mode.
+	 */
+	for_each_possible_cpu(i) {
+		struct cpufreq_interactive_cpuinfo *pcpu;
+		pcpu = &per_cpu(cpuinfo, i);
+		pcpu->time_to_run = jiffies +
+					usecs_to_jiffies(timer_rate);
+	}
+	return count;
+}
+
+static ssize_t show_idle_cancel_timer(struct kobject *kobj,
+				struct attribute *attr,
+				char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%ld : %s gov timer entering idle\n",
+		idle_cancel_timer,
+		idle_cancel_timer ?
+			"Cancel" :
+			"Preserve");
+}
+
+static struct global_attr idle_cancel_timer_attr =
+	__ATTR(idle_cancel_timer, 0644,
+		show_idle_cancel_timer, store_idle_cancel_timer);
+
 static struct attribute *interactive_attributes[] = {
 	&hispeed_freq_attr.attr,
 	&go_hispeed_load_attr.attr,
@@ -810,6 +898,7 @@ static struct attribute *interactive_attributes[] = {
 	&input_boost.attr,
 	&boost.attr,
 	&boostpulse.attr,
+	&idle_cancel_timer_attr.attr,
 	NULL,
 };
 
@@ -874,6 +963,7 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		break;
 
 	case CPUFREQ_GOV_STOP:
+		mutex_lock(&set_speed_lock);
 		for_each_cpu(j, policy->cpus) {
 			pcpu = &per_cpu(cpuinfo, j);
 			pcpu->governor_enabled = 0;
@@ -888,7 +978,7 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 			 */
 			pcpu->idle_exit_time = 0;
 		}
-
+		mutex_unlock(&set_speed_lock);
 		flush_work(&freq_scale_down_work);
 		if (atomic_dec_return(&active_count) > 0)
 			return 0;
@@ -941,6 +1031,7 @@ static int __init cpufreq_interactive_init(void)
 	min_sample_time = DEFAULT_MIN_SAMPLE_TIME;
 	above_hispeed_delay_val = DEFAULT_ABOVE_HISPEED_DELAY;
 	timer_rate = DEFAULT_TIMER_RATE;
+	idle_cancel_timer = DEFAULT_IDLE_CANCEL_TIMER;
 
 	/* Initalize per-cpu timers */
 	for_each_possible_cpu(i) {

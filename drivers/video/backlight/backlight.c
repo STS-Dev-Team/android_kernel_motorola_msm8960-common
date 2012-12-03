@@ -19,6 +19,8 @@
 #include <asm/backlight.h>
 #endif
 
+#define BRIGHTNESS_FULL 0xFF
+
 static const char const *backlight_types[] = {
 	[BACKLIGHT_RAW] = "raw",
 	[BACKLIGHT_PLATFORM] = "platform",
@@ -191,6 +193,40 @@ static ssize_t backlight_show_max_brightness(struct device *dev,
 	return sprintf(buf, "%d\n", bd->props.max_brightness);
 }
 
+static ssize_t backlight_store_max_brightness(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int rc;
+	struct backlight_device *bd = to_backlight_device(dev);
+	unsigned long brightness;
+
+	rc = strict_strtoul(buf, 0, &brightness);
+	if (rc)
+		return rc;
+
+	rc = -ENXIO;
+
+	mutex_lock(&bd->ops_lock);
+	if (bd->ops) {
+		if (brightness > BRIGHTNESS_FULL)
+			brightness = BRIGHTNESS_FULL;
+		pr_debug("backlight: set max brightness to %lu\n",
+			 brightness);
+		if (bd->props.brightness > brightness)
+			bd->props.brightness = brightness;
+
+		bd->props.max_brightness = brightness;
+
+		backlight_update_status(bd);
+		rc = count;
+	}
+	mutex_unlock(&bd->ops_lock);
+
+	backlight_generate_event(bd, BACKLIGHT_UPDATE_SYSFS);
+
+	return rc;
+}
+
 static ssize_t backlight_show_actual_brightness(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -247,7 +283,7 @@ static struct device_attribute bl_device_attributes[] = {
 		     backlight_store_brightness),
 	__ATTR(actual_brightness, 0444, backlight_show_actual_brightness,
 		     NULL),
-	__ATTR(max_brightness, 0444, backlight_show_max_brightness, NULL),
+	__ATTR(max_brightness, 0644, backlight_show_max_brightness, backlight_store_max_brightness),
 	__ATTR(type, 0444, backlight_show_type, NULL),
 	__ATTR_NULL,
 };

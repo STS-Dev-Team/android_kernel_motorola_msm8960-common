@@ -32,6 +32,26 @@
 /* number of tx requests to allocate */
 #define TX_REQ_MAX 4
 
+
+#define STRING_INTERFACE        0
+
+/* static strings, in UTF-8 */
+static struct usb_string adb_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola ADB Interface",
+		{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings adb_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              adb_string_defs,
+};
+
+static struct usb_gadget_strings *adb_strings[] = {
+	&adb_string_table,
+	NULL,
+};
+
+
 static const char adb_shortname[] = "android_adb";
 
 struct adb_dev {
@@ -194,8 +214,10 @@ static void adb_complete_in(struct usb_ep *ep, struct usb_request *req)
 {
 	struct adb_dev *dev = _adb_dev;
 
-	if (req->status != 0)
+	if (req->status != 0) {
+		pr_err("%s: status = %d\n", __func__, req->status);
 		atomic_set(&dev->error, 1);
+	}
 
 	adb_req_put(dev, &dev->tx_idle, req);
 
@@ -207,8 +229,10 @@ static void adb_complete_out(struct usb_ep *ep, struct usb_request *req)
 	struct adb_dev *dev = _adb_dev;
 
 	dev->rx_done = 1;
-	if (req->status != 0)
+	if (req->status != 0) {
+		pr_err("%s: status = %d\n", __func__, req->status);
 		atomic_set(&dev->error, 1);
+	}
 
 	wake_up(&dev->read_wq);
 }
@@ -273,14 +297,20 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 	int ret;
 
 	pr_debug("adb_read(%d)\n", count);
-	if (!_adb_dev)
+	if (!_adb_dev) {
+		pr_err("%s _adb_dev is null\n", __func__);
 		return -ENODEV;
+	}
 
-	if (count > ADB_BULK_BUFFER_SIZE)
+	if (count > ADB_BULK_BUFFER_SIZE) {
+		pr_err("%s err: count > ADB_BULK_BUFFER_SIZE\n", __func__);
 		return -EINVAL;
+	}
 
-	if (adb_lock(&dev->read_excl))
+	if (adb_lock(&dev->read_excl)) {
+		pr_err("%s err: failed to lock read_excl\n", __func__);
 		return -EBUSY;
+	}
 
 	/* we will block until we're online */
 	while (!(atomic_read(&dev->online) || atomic_read(&dev->error))) {
@@ -290,6 +320,8 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 			atomic_read(&dev->error)));
 		if (ret < 0) {
 			adb_unlock(&dev->read_excl);
+			pr_err("%s: wait_event for online returned %d\n",
+						__func__, ret);
 			return ret;
 		}
 	}
@@ -305,7 +337,7 @@ requeue_req:
 	dev->rx_done = 0;
 	ret = usb_ep_queue(dev->ep_out, req, GFP_ATOMIC);
 	if (ret < 0) {
-		pr_debug("adb_read: failed to queue req %p (%d)\n", req, ret);
+		pr_err("adb_read: failed to queue req %p (%d)\n", req, ret);
 		r = -EIO;
 		atomic_set(&dev->error, 1);
 		goto done;
@@ -319,6 +351,8 @@ requeue_req:
 		atomic_set(&dev->error, 1);
 		r = ret;
 		usb_ep_dequeue(dev->ep_out, req);
+		pr_err("%s: wait_event for rx done returned %d\n",
+						__func__, ret);
 		goto done;
 	}
 	if (!atomic_read(&dev->error)) {
@@ -348,12 +382,16 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 	int r = count, xfer;
 	int ret;
 
-	if (!_adb_dev)
+	if (!_adb_dev) {
+		pr_err("%s _adb_dev is null\n", __func__);
 		return -ENODEV;
+	}
 	pr_debug("adb_write(%d)\n", count);
 
-	if (adb_lock(&dev->write_excl))
+	if (adb_lock(&dev->write_excl)) {
+		pr_err("%s err: failed to lock write_excl\n", __func__);
 		return -EBUSY;
+	}
 
 	while (count > 0) {
 		if (atomic_read(&dev->error)) {
@@ -386,7 +424,7 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 			req->length = xfer;
 			ret = usb_ep_queue(dev->ep_in, req, GFP_ATOMIC);
 			if (ret < 0) {
-				pr_debug("adb_write: xfer error %d\n", ret);
+				pr_err("adb_write: xfer error %d\n", ret);
 				atomic_set(&dev->error, 1);
 				r = -EIO;
 				break;
@@ -411,11 +449,15 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 static int adb_open(struct inode *ip, struct file *fp)
 {
 	pr_info("adb_open\n");
-	if (!_adb_dev)
+	if (!_adb_dev) {
+		pr_err("%s _adb_dev is null\n", __func__);
 		return -ENODEV;
+	}
 
-	if (adb_lock(&_adb_dev->open_excl))
+	if (adb_lock(&_adb_dev->open_excl)) {
+		pr_err("%s err: failed to lock open_excl\n", __func__);
 		return -EBUSY;
+	}
 
 	fp->private_data = _adb_dev;
 
@@ -558,8 +600,15 @@ static void adb_function_disable(struct usb_function *f)
 static int adb_bind_config(struct usb_configuration *c)
 {
 	struct adb_dev *dev = _adb_dev;
+	int status = -1;
 
 	printk(KERN_INFO "adb_bind_config\n");
+
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		adb_string_defs[STRING_INTERFACE].id = status;
+		adb_interface_desc.iInterface = status;
+	}
 
 	dev->cdev = c->cdev;
 	dev->function.name = "adb";
@@ -569,6 +618,7 @@ static int adb_bind_config(struct usb_configuration *c)
 	dev->function.unbind = adb_function_unbind;
 	dev->function.set_alt = adb_function_set_alt;
 	dev->function.disable = adb_function_disable;
+	dev->function.strings = adb_strings;
 
 	return usb_add_function(c, &dev->function);
 }

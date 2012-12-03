@@ -77,6 +77,8 @@ struct msm_actuator_func_tbl {
 			struct damping_params_t *,
 			int8_t,
 			int16_t);
+	int32_t (*actuator_set_lens_mode)(struct msm_actuator_ctrl_t *,
+			uint8_t);
 };
 
 struct msm_actuator_ctrl_t {
@@ -126,5 +128,8 @@ int32_t msm_actuator_write_focus(struct msm_actuator_ctrl_t *a_ctrl,
 int32_t msm_actuator_create_subdevice(struct msm_actuator_ctrl_t *a_ctrl,
 		struct i2c_board_info const *board_info,
 		struct v4l2_subdev *sdev);
+int32_t msm_actuator_set_lens_mode(struct msm_actuator_ctrl_t *a_ctrl,
+		uint8_t mode);
+
 
 #endif

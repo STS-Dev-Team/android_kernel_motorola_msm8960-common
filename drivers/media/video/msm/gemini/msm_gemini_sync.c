@@ -207,10 +207,14 @@ int msm_gemini_evt_get(struct msm_gemini_device *pgmn_dev,
 {
 	struct msm_gemini_core_buf *buf_p;
 	struct msm_gemini_ctrl_cmd ctrl_cmd;
-
+	int rc;
 	GMN_DBG("%s:%d] Enter\n", __func__, __LINE__);
 
-	msm_gemini_q_wait(&pgmn_dev->evt_q);
+	rc = msm_gemini_q_wait(&pgmn_dev->evt_q);
+	if (!rc) {
+		GMN_PR_ERR("%s:%d] timed out\n", __func__, __LINE__);
+		return rc;
+	}
 	buf_p = msm_gemini_q_out(&pgmn_dev->evt_q);
 
 	if (!buf_p) {
@@ -303,10 +307,15 @@ int msm_gemini_output_get(struct msm_gemini_device *pgmn_dev, void __user *to)
 {
 	struct msm_gemini_core_buf *buf_p;
 	struct msm_gemini_buf buf_cmd;
-
+	int rc;
 	GMN_DBG("%s:%d] Enter\n", __func__, __LINE__);
 
-	msm_gemini_q_wait(&pgmn_dev->output_rtn_q);
+	rc = msm_gemini_q_wait(&pgmn_dev->output_rtn_q);
+	if (!rc) {
+		GMN_PR_ERR("%s:%d] timed out\n", __func__, __LINE__);
+		return rc;
+	}
+
 	buf_p = msm_gemini_q_out(&pgmn_dev->output_rtn_q);
 
 	if (!buf_p) {
@@ -412,9 +421,14 @@ int msm_gemini_input_get(struct msm_gemini_device *pgmn_dev, void __user * to)
 {
 	struct msm_gemini_core_buf *buf_p;
 	struct msm_gemini_buf buf_cmd;
-
+	int rc;
 	GMN_DBG("%s:%d] Enter\n", __func__, __LINE__);
-	msm_gemini_q_wait(&pgmn_dev->input_rtn_q);
+	rc = msm_gemini_q_wait(&pgmn_dev->input_rtn_q);
+	if (!rc) {
+		GMN_PR_ERR("%s:%d] timed out\n", __func__, __LINE__);
+		return rc;
+	}
+
 	buf_p = msm_gemini_q_out(&pgmn_dev->input_rtn_q);
 
 	if (!buf_p) {
@@ -473,11 +487,12 @@ int msm_gemini_input_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 	} else {
 	buf_p->y_buffer_addr    = msm_gemini_platform_v2p(buf_cmd.fd,
 		buf_cmd.y_len + buf_cmd.cbcr_len, &buf_p->file,
-		&buf_p->handle)	+ buf_cmd.offset;
+		&buf_p->handle)	+ buf_cmd.offset + buf_cmd.y_off;
 	}
 	buf_p->y_len          = buf_cmd.y_len;
 
-	buf_p->cbcr_buffer_addr = buf_p->y_buffer_addr + buf_cmd.y_len;
+	buf_p->cbcr_buffer_addr = buf_p->y_buffer_addr + buf_cmd.y_len +
+					buf_cmd.cbcr_off;
 	buf_p->cbcr_len       = buf_cmd.cbcr_len;
 
 	buf_p->num_of_mcu_rows = buf_cmd.num_of_mcu_rows;

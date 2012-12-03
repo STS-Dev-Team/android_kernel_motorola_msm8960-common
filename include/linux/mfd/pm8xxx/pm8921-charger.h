@@ -18,6 +18,65 @@
 
 #define PM8921_CHARGER_DEV_NAME	"pm8921-charger"
 
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+/**
+ * struct pm8921_charger_battery_data -
+ * @max_voltage:	the max voltage (mV) the battery should be charged up to
+ * @min_voltage:	the voltage (mV) where charging method switches from
+ *			trickle to fast. This is also the minimum voltage the
+ *			system operates at
+ * @resume_voltage_delta:	the (mV) drop to wait for before resume charging
+ *				after the battery has been fully charged
+ * @term_current:	the charger current (mA) at which EOC happens
+ * @cool_temp:		the temperature (degC) at which the battery is
+ *			considered cool charging current and voltage is reduced
+ * @warm_temp:		the temperature (degC) at which the battery is
+ *			considered warm charging current and voltage is reduced
+ * @temp_check_period:	The polling interval in seconds to check battery
+ *			temeperature if it has gone to cool or warm temperature
+ *			area
+ * @max_bat_chg_current:	Max charge current of the battery in mA
+ *				Usually 70% of full charge capacity
+ * @cool_bat_chg_current:	chg current (mA) when the battery is cool
+ * @warm_bat_chg_current:	chg current (mA)  when the battery is warm
+ * @cool_bat_voltage:		chg voltage (mV) when the battery is cool
+ * @warm_bat_voltage:		chg voltage (mV) when the battery is warm
+ * @step_charge_current:        Batteries with Peak Voltages above 4.2 V
+ *                              sometimes require a reduced Charge Rate
+ *                              above a voltage threshold; this is that rate
+ * @step_charge_voltage:        Batteries with Peak Voltages above 4.2 V
+ *                              sometimes require a reduced Charge Rate
+ *                              above a voltage threshold; this is that voltage
+ * @hot_temp:           the battery temperature (degC) at which the battery is
+ *                      considered hot and charging is stopped
+ * @hot_temp_offset     the offset (degC) to apply when hot temp of the battery
+ *                      is reached
+ * @hot_temp_pcb:       the PCB temperature (degC) used to determine battery
+ *                      charging behavior
+ * @hot_temp_pcb_offset the offset (degC) to apply when the hot temp of the PCB
+ *                      is reached
+ */
+struct pm8921_charger_battery_data {
+	unsigned int			max_voltage;
+	unsigned int			min_voltage;
+	unsigned int			resume_voltage_delta;
+	unsigned int			term_current;
+	int				cool_temp;
+	int				warm_temp;
+	unsigned int			max_bat_chg_current;
+	unsigned int			cool_bat_chg_current;
+	unsigned int			warm_bat_chg_current;
+	unsigned int			cool_bat_voltage;
+	unsigned int			warm_bat_voltage;
+	unsigned int			step_charge_current;
+	unsigned int			step_charge_voltage;
+	int                             hot_temp;
+	int                             hot_temp_offset;
+	int                             hot_temp_pcb;
+	signed char                     hot_temp_pcb_offset;
+};
+#endif
+
 struct pm8xxx_charger_core_data {
 	unsigned int	vbat_channel;
 	unsigned int	batt_temp_channel;
@@ -47,6 +106,31 @@ enum pm8921_usb_debounce_time {
 	PM_USB_DEBOUNCE_40P5MS,
 	PM_USB_DEBOUNCE_80P5MS,
 };
+
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+enum alarm_status {
+	SPURIOUS,
+	LOW_THRLD,
+	HIGH_THRLD
+};
+
+enum pm8921_alarm_state {
+	PM_BATT_ALARM_NORMAL,
+	PM_BATT_ALARM_WARNING,
+	PM_BATT_ALARM_SHUTDOWN,
+	PM_BATT_ALARM_OV
+};
+
+enum pm8921_btm_state {
+	BTM_NORM = 0,
+	BTM_COLD,
+	BTM_COOL_HV,
+	BTM_COOL_LV,
+	BTM_WARM_HV,
+	BTM_WARM_LV,
+	BTM_HOT,
+};
+#endif
 
 /**
  * struct pm8921_charger_platform_data -
@@ -100,6 +184,27 @@ enum pm8921_usb_debounce_time {
  *			VBAT_THERM goes below 35% of VREF_THERM, if low the
  *			battery will be considered hot when VBAT_THERM goes
  *			below 25% of VREF_THERM. Hardware defaults to low.
+ * @get_batt_info:      a board specific function to return battery data If NULL
+ *                      pdata will be used to charge the battery
+ * @step_charge_current:        Batteries with Peak Voltages above 4.2 V
+ *                              sometimes require a reduced Charge Rate
+ *                              above a voltage threshold; this is that rate
+ * @step_charge_voltage:        Batteries with Peak Voltages above 4.2 V
+ *                              sometimes require a reduced Charge Rate
+ *                              above a voltage threshold; this is that voltage
+ * @batt_alarm_delta:           This is the delta voltage that is added to the
+ *                              peak volatg of teh battery to determine the
+ *                              Upper batt alarm threshold
+ * @lower_battery_threshold:    Warning threshold for lower battery alarm
+ *                              threshold while discharging.
+ * @hot_temp:           the battery temperature (degC) at which the battery is
+ *                      considered hot and charging is stopped
+ * @hot_temp_offset     the offset (degC) to apply when hot temp of the battery
+ *                      is reached
+ * @hot_temp_pcb:       the PCB temperature (degC) used to determine battery
+ *                      charging behavior
+ * @hot_temp_pcb_offset the offset (degC) to apply when the hot temp of the PCB
+ *                      is reached
  */
 struct pm8921_charger_platform_data {
 	struct pm8xxx_charger_core_data	charger_cdata;
@@ -131,6 +236,28 @@ struct pm8921_charger_platform_data {
 	int				thermal_levels;
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
+	int				factory_mode;
+	int				meter_lock;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	int64_t (*get_batt_info) (int64_t battery_id,
+				  struct pm8921_charger_battery_data *data);
+	unsigned int			step_charge_current;
+	unsigned int			step_charge_voltage;
+	int64_t (*temp_range_cb) (int batt_temp, int batt_mvolt,
+				  struct pm8921_charger_battery_data *data,
+				  int64_t *enable,
+				  enum pm8921_btm_state *state);
+	unsigned int              batt_alarm_delta;
+	unsigned int              lower_battery_threshold;
+	int                       hot_temp;
+	int                       hot_temp_offset;
+	int                       hot_temp_pcb;
+	signed char               hot_temp_pcb_offset;
+	void (*force_therm_bias) (struct device *dev, int enable);
+#endif
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+	void				(*arch_reboot_cb)(void);
+#endif
 };
 
 enum pm8921_charger_source {
@@ -143,6 +270,16 @@ enum pm8921_charger_source {
 void pm8921_charger_vbus_draw(unsigned int mA);
 int pm8921_charger_register_vbus_sn(void (*callback)(int));
 void pm8921_charger_unregister_vbus_sn(void (*callback)(int));
+
+#ifdef CONFIG_EMU_DETECTION
+/**
+ * pm8921_charger_enable -
+ *
+ * EMU driver calls this to clear the suspend bit before reading ADC value
+ */
+void  pm8921_charger_usb_suspend_clear(void);
+#endif
+
 /**
  * pm8921_charger_enable -
  *
@@ -259,6 +396,11 @@ int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
  *
  */
 int pm8921_usb_ovp_disable(int disable);
+
+#ifdef CONFIG_PM8921_TEST_OVERRIDE
+void pm8921_override_force_battery_update(void);
+#endif
+
 #else
 static inline void pm8921_charger_vbus_draw(unsigned int mA)
 {

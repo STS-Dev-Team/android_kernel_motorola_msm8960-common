@@ -437,6 +437,9 @@ static void mdp4_overlay_dtv_ov_start(struct msm_fb_data_type *mfd)
 	if (mfd->ov_start)
 		return;
 
+	if (dtv_pipe == NULL)
+		return;
+
 	if (dtv_pipe->blt_addr) {
 		mdp4_dtv_blt_ov_update(dtv_pipe);
 		dtv_pipe->ov_cnt++;
@@ -465,8 +468,10 @@ static void mdp4_overlay_dtv_wait4_ov_done(struct msm_fb_data_type *mfd,
 		return;
 	if (!(data & 0x1) || (pipe == NULL))
 		return;
-	wait_for_completion_timeout(&dtv_pipe->comp,
-			msecs_to_jiffies(VSYNC_PERIOD*2));
+	if (wait_for_completion_timeout(&dtv_pipe->comp,
+			msecs_to_jiffies(VSYNC_PERIOD*2)) == 0)
+		pr_err("failed to wait for OV1 done\n");
+
 	mdp_disable_irq(MDP_OVERLAY1_TERM);
 }
 
@@ -519,6 +524,8 @@ void mdp4_external_vsync_dtv()
  */
 void mdp4_overlay1_done_dtv()
 {
+	if (dtv_pipe == NULL)
+		return;
 	if (dtv_pipe->blt_addr) {
 		mdp4_dtv_blt_dmae_update(dtv_pipe);
 		dtv_pipe->dmae_cnt++;
@@ -570,7 +577,8 @@ void mdp4_overlay_dtv_wait4vsync(void)
 	mdp_intr_mask |= INTR_EXTERNAL_VSYNC;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-	wait_for_completion_killable(&dtv_comp);
+	if (!wait_for_completion_killable_timeout(&dtv_comp, HZ))
+		mdp4_hang_panic();
 	mdp_disable_irq(MDP_DMA_E_TERM);
 }
 
@@ -587,7 +595,13 @@ static void mdp4_overlay_dtv_wait4dmae(struct msm_fb_data_type *mfd)
 	mdp_intr_mask |= INTR_DMA_E_DONE;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-	wait_for_completion_killable(&dtv_pipe->comp);
+	if (!wait_for_completion_killable_timeout(&dtv_pipe->comp, HZ)) {
+		pr_err("%s: wait timeout for dtv_pipe->comp\n", __func__);
+		mdp4_hang_panic();
+		spin_lock_irqsave(&mdp_spin_lock, flag);
+		mfd->dma->waiting = FALSE;
+		spin_unlock_irqrestore(&mdp_spin_lock, flag);
+	}
 	mdp_disable_irq(MDP_DMA_E_TERM);
 }
 
@@ -621,8 +635,8 @@ static void mdp4_dtv_do_blt(struct msm_fb_data_type *mfd, int enable)
 
 	MDP_OUTP(MDP_BASE + DTV_BASE, 0);	/* stop dtv */
 	msleep(20);
-	mdp4_overlayproc_cfg(dtv_pipe);
 	mdp4_overlay_dmae_xy(dtv_pipe);
+	mdp4_overlayproc_cfg(dtv_pipe);
 	MDP_OUTP(MDP_BASE + DTV_BASE, 1);	/* start dtv */
 }
 

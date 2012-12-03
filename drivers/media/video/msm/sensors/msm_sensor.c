@@ -143,7 +143,7 @@ int32_t msm_sensor_set_fps(struct msm_sensor_ctrl_t *s_ctrl,
 		total_lines_per_frame = (uint16_t)
 			((s_ctrl->curr_frame_length_lines) *
 			s_ctrl->fps_divider/Q10);
-
+		total_lines_per_frame += (total_lines_per_frame & 0x1);
 		rc = msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 			s_ctrl->sensor_output_reg_addr->frame_length_lines,
 			total_lines_per_frame, MSM_CAMERA_I2C_WORD_DATA);
@@ -156,7 +156,11 @@ int32_t msm_sensor_write_exp_gain1(struct msm_sensor_ctrl_t *s_ctrl,
 {
 	uint32_t fl_lines;
 	uint8_t offset;
-	fl_lines = s_ctrl->curr_frame_length_lines;
+	if (s_ctrl->curr_frame_length_lines)
+		fl_lines = s_ctrl->curr_frame_length_lines;
+	else
+		fl_lines = s_ctrl->msm_sensor_reg->
+			output_settings[0].frame_length_lines;
 	fl_lines = (fl_lines * s_ctrl->fps_divider) / Q10;
 	offset = s_ctrl->sensor_exp_gain_info->vert_offset;
 	if (line > (fl_lines - offset))
@@ -235,6 +239,10 @@ int32_t msm_sensor_setting1(struct msm_sensor_ctrl_t *s_ctrl,
 			msleep(30);
 			csi_config = 1;
 		}
+		v4l2_subdev_notify(&s_ctrl->sensor_v4l2_subdev,
+			NOTIFY_PCLK_CHANGE,
+			&s_ctrl->sensordata->pdata->ioclk.vfe_clk_rate);
+
 		s_ctrl->func_tbl->sensor_start_stream(s_ctrl);
 		msleep(50);
 	}
@@ -249,7 +257,7 @@ int32_t msm_sensor_setting(struct msm_sensor_ctrl_t *s_ctrl,
 		NOTIFY_ISPIF_STREAM, (void *)ISPIF_STREAM(
 		PIX_0, ISPIF_OFF_IMMEDIATELY));
 	s_ctrl->func_tbl->sensor_stop_stream(s_ctrl);
-	msleep(30);
+	msleep(67);
 	if (update_type == MSM_SENSOR_REG_INIT) {
 		s_ctrl->curr_csi_params = NULL;
 		msm_sensor_enable_debugfs(s_ctrl);
@@ -278,7 +286,7 @@ int32_t msm_sensor_setting(struct msm_sensor_ctrl_t *s_ctrl,
 			NOTIFY_ISPIF_STREAM, (void *)ISPIF_STREAM(
 			PIX_0, ISPIF_ON_FRAME_BOUNDARY));
 		s_ctrl->func_tbl->sensor_start_stream(s_ctrl);
-		msleep(30);
+		msleep(67);
 	}
 	return rc;
 }
@@ -296,8 +304,14 @@ int32_t msm_sensor_set_sensor_mode(struct msm_sensor_ctrl_t *s_ctrl,
 			s_ctrl->msm_sensor_reg->
 			output_settings[res].line_length_pclk;
 
-		if (s_ctrl->func_tbl->sensor_setting
-			(s_ctrl, MSM_SENSOR_UPDATE_PERIODIC, res) < 0)
+		if (s_ctrl->sensordata->pdata->is_csic ||
+			!s_ctrl->sensordata->csi_if)
+			rc = s_ctrl->func_tbl->sensor_csi_setting(s_ctrl,
+				MSM_SENSOR_UPDATE_PERIODIC, res);
+		else
+			rc = s_ctrl->func_tbl->sensor_setting(s_ctrl,
+				MSM_SENSOR_UPDATE_PERIODIC, res);
+		if (rc < 0)
 			return rc;
 		s_ctrl->curr_res = res;
 	}
@@ -317,8 +331,13 @@ int32_t msm_sensor_mode_init(struct msm_sensor_ctrl_t *s_ctrl,
 		s_ctrl->curr_res = MSM_SENSOR_INVALID_RES;
 		s_ctrl->cam_mode = mode;
 
-		rc = s_ctrl->func_tbl->sensor_setting(s_ctrl,
-			MSM_SENSOR_REG_INIT, 0);
+		if (s_ctrl->sensordata->pdata->is_csic ||
+			!s_ctrl->sensordata->csi_if)
+			rc = s_ctrl->func_tbl->sensor_csi_setting(s_ctrl,
+				MSM_SENSOR_REG_INIT, 0);
+		else
+			rc = s_ctrl->func_tbl->sensor_setting(s_ctrl,
+				MSM_SENSOR_REG_INIT, 0);
 	}
 	return rc;
 }
@@ -361,7 +380,7 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 	mutex_lock(s_ctrl->msm_sensor_mutex);
 	CDBG("msm_sensor_config: cfgtype = %d\n",
 	cdata.cfgtype);
-		switch (cdata.cfgtype) {
+	switch (cdata.cfgtype) {
 		case CFG_SET_FPS:
 		case CFG_SET_PICT_FPS:
 			if (s_ctrl->func_tbl->
@@ -467,6 +486,99 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 				rc = -EFAULT;
 			break;
 
+		case CFG_GET_SNAPSHOTDATA:
+			{
+				size_t size_cfg  =
+					sizeof(struct sensor_cfg_data);
+				uint32_t *data_ptr =
+					&cdata.cfg.data.exposure_time;
+				if (s_ctrl->func_tbl->sensor_get_exposure_time)
+					s_ctrl->func_tbl->
+						sensor_get_exposure_time(s_ctrl,
+								data_ptr);
+				else {
+					 rc = -EFAULT;
+					 break;
+				}
+
+				cdata.cfg.data.metering_mode = -1;
+				cdata.cfg.data.light_source = -1;
+				cdata.cfg.data.flash = -1;
+
+				if (copy_to_user((void *)argp,
+							&cdata, size_cfg))
+					rc = -EFAULT;
+				break;
+			}
+
+		case CFG_SET_GAMMA:
+			if (s_ctrl->func_tbl->sensor_set_gamma == NULL) {
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_set_gamma(s_ctrl,
+					cdata.cfg.fact_set.gamma_unity);
+			break;
+
+		case CFG_SET_SHARPENING:
+			if (s_ctrl->func_tbl->sensor_set_sharpening == NULL) {
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_set_sharpening(s_ctrl,
+					cdata.cfg.fact_set.sharpening);
+			break;
+
+		case CFG_SET_LENSSHADING:
+			if (s_ctrl->func_tbl->sensor_set_lens_shading == NULL) {
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_set_lens_shading(s_ctrl,
+					cdata.cfg.fact_set.lens_shading);
+			break;
+
+		case CFG_SET_TARGET_EXPOSURE:
+			if (s_ctrl->func_tbl->sensor_set_target_exposure
+					== NULL) {
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_set_target_exposure(
+					s_ctrl,
+					cdata.cfg.fact_set.target_exposure);
+			break;
+
+		case CFG_GET_MODULE_INFO:
+			if (s_ctrl->func_tbl->sensor_get_module_info == NULL) {
+				pr_err("%s: sensor_get_module_info is null!\n",
+					__func__);
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_get_module_info(
+					s_ctrl,
+					&cdata.cfg.module_info);
+
+			if (copy_to_user((void *)argp,
+					&cdata,
+					sizeof(struct sensor_cfg_data)))
+				rc = -EFAULT;
+			break;
+
+		case CFG_SET_FPS_RANGE:
+			if (s_ctrl->func_tbl->sensor_set_frame_rate_range
+					== NULL) {
+				pr_err("%s: sensor_set_frame_rate_range!\n",
+						__func__);
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_set_frame_rate_range(
+					s_ctrl,
+					&cdata.cfg.fps_range);
+			break;
+
 		default:
 			rc = -EFAULT;
 			break;
@@ -477,85 +589,26 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 	return rc;
 }
 
-static struct msm_cam_clk_info cam_clk_info[] = {
-	{"cam_clk", MSM_SENSOR_MCLK_24HZ},
-};
-
 int32_t msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int32_t rc = 0;
 	struct msm_camera_sensor_info *data = s_ctrl->sensordata;
 	CDBG("%s: %d\n", __func__, __LINE__);
-	s_ctrl->reg_ptr = kzalloc(sizeof(struct regulator *)
-			* data->sensor_platform_info->num_vreg, GFP_KERNEL);
-	if (!s_ctrl->reg_ptr) {
-		pr_err("%s: could not allocate mem for regulators\n",
-			__func__);
-		return -ENOMEM;
+	msm_sensor_probe_on(&s_ctrl->sensor_i2c_client->client->dev);
+	msm_camio_clk_rate_set(MSM_SENSOR_MCLK_24HZ);
+	rc = gpio_request(data->sensor_platform_info->sensor_reset,
+		"SENSOR_NAME");
+	if (!rc) {
+		CDBG("%s: reset sensor\n", __func__);
+		gpio_direction_output(data->sensor_platform_info->sensor_reset,
+			 0);
+		usleep_range(1000, 2000);
+		gpio_set_value_cansleep(data->sensor_platform_info->
+			sensor_reset, 1);
+		usleep_range(4000, 5000);
+	} else {
+		CDBG("%s: gpio request fail", __func__);
 	}
-
-	rc = msm_camera_request_gpio_table(data, 1);
-	if (rc < 0) {
-		pr_err("%s: request gpio failed\n", __func__);
-		goto request_gpio_failed;
-	}
-
-	rc = msm_camera_config_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-			s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-			s_ctrl->sensordata->sensor_platform_info->num_vreg,
-			s_ctrl->reg_ptr, 1);
-	if (rc < 0) {
-		pr_err("%s: regulator on failed\n", __func__);
-		goto config_vreg_failed;
-	}
-
-	rc = msm_camera_enable_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-			s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-			s_ctrl->sensordata->sensor_platform_info->num_vreg,
-			s_ctrl->reg_ptr, 1);
-	if (rc < 0) {
-		pr_err("%s: enable regulator failed\n", __func__);
-		goto enable_vreg_failed;
-	}
-
-	rc = msm_camera_config_gpio_table(data, 1);
-	if (rc < 0) {
-		pr_err("%s: config gpio failed\n", __func__);
-		goto config_gpio_failed;
-	}
-
-	if (s_ctrl->clk_rate != 0)
-		cam_clk_info->clk_rate = s_ctrl->clk_rate;
-
-	rc = msm_cam_clk_enable(&s_ctrl->sensor_i2c_client->client->dev,
-		cam_clk_info, &s_ctrl->cam_clk, ARRAY_SIZE(cam_clk_info), 1);
-	if (rc < 0) {
-		pr_err("%s: clk enable failed\n", __func__);
-		goto enable_clk_failed;
-	}
-
-	usleep_range(1000, 2000);
-	if (data->sensor_platform_info->ext_power_ctrl != NULL)
-		data->sensor_platform_info->ext_power_ctrl(1);
-
-	return rc;
-enable_clk_failed:
-		msm_camera_config_gpio_table(data, 0);
-config_gpio_failed:
-	msm_camera_enable_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-			s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-			s_ctrl->sensordata->sensor_platform_info->num_vreg,
-			s_ctrl->reg_ptr, 0);
-
-enable_vreg_failed:
-	msm_camera_config_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-		s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-		s_ctrl->sensordata->sensor_platform_info->num_vreg,
-		s_ctrl->reg_ptr, 0);
-config_vreg_failed:
-	msm_camera_request_gpio_table(data, 0);
-request_gpio_failed:
-	kfree(s_ctrl->reg_ptr);
 	return rc;
 }
 
@@ -563,24 +616,14 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	struct msm_camera_sensor_info *data = s_ctrl->sensordata;
 	CDBG("%s\n", __func__);
-	if (data->sensor_platform_info->ext_power_ctrl != NULL)
-		data->sensor_platform_info->ext_power_ctrl(0);
-	msm_cam_clk_enable(&s_ctrl->sensor_i2c_client->client->dev,
-		cam_clk_info, &s_ctrl->cam_clk, ARRAY_SIZE(cam_clk_info), 0);
-	msm_camera_config_gpio_table(data, 0);
-	msm_camera_enable_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-		s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-		s_ctrl->sensordata->sensor_platform_info->num_vreg,
-		s_ctrl->reg_ptr, 0);
-	msm_camera_config_vreg(&s_ctrl->sensor_i2c_client->client->dev,
-		s_ctrl->sensordata->sensor_platform_info->cam_vreg,
-		s_ctrl->sensordata->sensor_platform_info->num_vreg,
-		s_ctrl->reg_ptr, 0);
-	msm_camera_request_gpio_table(data, 0);
-	kfree(s_ctrl->reg_ptr);
+	s_ctrl->func_tbl->sensor_stop_stream(s_ctrl);
+	msleep(20);
+	msm_sensor_probe_off(&s_ctrl->sensor_i2c_client->client->dev);
+	gpio_set_value_cansleep(data->sensor_platform_info->sensor_reset, 0);
+	usleep_range(1000, 2000);
+	gpio_free(data->sensor_platform_info->sensor_reset);
 	return 0;
 }
-
 
 int32_t msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -616,7 +659,8 @@ int32_t msm_sensor_i2c_probe(struct i2c_client *client,
 	struct msm_sensor_ctrl_t *s_ctrl;
 	CDBG("%s_i2c_probe called\n", client->name);
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		CDBG("i2c_check_functionality failed\n");
+		pr_err("%s %s i2c_check_functionality failed\n",
+			__func__, client->name);
 		rc = -EFAULT;
 		return rc;
 	}
@@ -628,21 +672,24 @@ int32_t msm_sensor_i2c_probe(struct i2c_client *client,
 			s_ctrl->sensor_i2c_client->client->addr =
 				s_ctrl->sensor_i2c_addr;
 	} else {
+		pr_err("%s %s sensor_i2c_client NULL\n",
+			__func__, client->name);
 		rc = -EFAULT;
 		return rc;
 	}
 
 	s_ctrl->sensordata = client->dev.platform_data;
-	if (s_ctrl->sensordata == NULL) {
-		pr_err("%s: NULL sensor data\n", __func__);
-		return -EFAULT;
-	}
 
 	rc = s_ctrl->func_tbl->sensor_power_up(s_ctrl);
-	if (rc < 0)
-		goto probe_fail;
+	if (rc < 0) {
+		pr_err("%s %s power up failed\n", __func__, client->name);
+		return rc;
+	}
 
-	rc = msm_sensor_match_id(s_ctrl);
+	if (s_ctrl->func_tbl->sensor_match_id)
+		rc = s_ctrl->func_tbl->sensor_match_id(s_ctrl);
+	else
+		rc = msm_sensor_match_id(s_ctrl);
 	if (rc < 0)
 		goto probe_fail;
 
@@ -673,7 +720,7 @@ int32_t msm_sensor_i2c_probe(struct i2c_client *client,
 	msm_sensor_register(&s_ctrl->sensor_v4l2_subdev);
 	goto power_down;
 probe_fail:
-	CDBG("%s_i2c_probe failed\n", client->name);
+	pr_err("%s %s_i2c_probe failed\n", __func__, client->name);
 power_down:
 	if (rc > 0)
 		rc = 0;

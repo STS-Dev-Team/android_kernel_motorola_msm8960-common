@@ -1184,6 +1184,11 @@ static int update_read_avail(struct smem_log_inst *inst)
 	int curr_read_avail;
 	unsigned long flags = 0;
 
+	if (!inst->idx) {
+		printk(KERN_ERR "%s: inst->idx NULL, no logging\n", __func__);
+		return -1;
+	}
+
 	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
 
 	curr_read_avail = (*inst->idx - inst->read_idx);

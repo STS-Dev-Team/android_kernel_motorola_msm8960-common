@@ -28,6 +28,10 @@
 #include <linux/rcupdate.h>
 #include "input-compat.h"
 
+#ifdef CONFIG_PM_DEEPSLEEP
+#include <linux/suspend.h>
+#endif
+
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input core");
 MODULE_LICENSE("GPL");
@@ -252,6 +256,13 @@ static void input_handle_event(struct input_dev *dev,
 			}
 
 			disposition = INPUT_PASS_TO_HANDLERS;
+#ifdef CONFIG_PM_DEEPSLEEP
+			/*
+			 * Ignore KEY events in deep sleep mode
+			 */
+			if (get_deepsleep_mode() && code != KEY_POWER)
+				disposition = INPUT_IGNORE_EVENT;
+#endif
 		}
 		break;
 
@@ -261,6 +272,13 @@ static void input_handle_event(struct input_dev *dev,
 
 			__change_bit(code, dev->sw);
 			disposition = INPUT_PASS_TO_HANDLERS;
+#ifdef CONFIG_PM_DEEPSLEEP
+			/*
+			 * Ignore Slider open/close events in deep sleep mode
+			 */
+			if (get_deepsleep_mode() && value == 0)
+				disposition = INPUT_IGNORE_EVENT;
+#endif
 		}
 		break;
 
@@ -279,7 +297,13 @@ static void input_handle_event(struct input_dev *dev,
 	case EV_MSC:
 		if (is_event_supported(code, dev->mscbit, MSC_MAX))
 			disposition = INPUT_PASS_TO_ALL;
-
+#ifdef CONFIG_PM_DEEPSLEEP
+			/*
+			 * Ignore MICS SCAN events from keypad driver
+			 */
+			if (get_deepsleep_mode() && code == MSC_SCAN)
+				disposition = INPUT_IGNORE_EVENT;
+#endif
 		break;
 
 	case EV_LED:
@@ -590,15 +614,18 @@ EXPORT_SYMBOL(input_close_device);
 static void input_dev_release_keys(struct input_dev *dev)
 {
 	int code;
+	int pass = false;
 
 	if (is_event_supported(EV_KEY, dev->evbit, EV_MAX)) {
 		for (code = 0; code <= KEY_MAX; code++) {
 			if (is_event_supported(code, dev->keybit, KEY_MAX) &&
 			    __test_and_clear_bit(code, dev->key)) {
 				input_pass_event(dev, EV_KEY, code, 0);
+				pass = true;
 			}
 		}
-		input_pass_event(dev, EV_SYN, SYN_REPORT, 1);
+		if (pass)
+			input_pass_event(dev, EV_SYN, SYN_REPORT, 1);
 	}
 }
 

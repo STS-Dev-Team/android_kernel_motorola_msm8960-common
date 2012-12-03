@@ -279,16 +279,29 @@ static inline void select_nohz_load_balancer(int stop_tick) { }
 #endif
 
 /*
- * Only dump TASK_* tasks. (0 for all tasks)
+ * Threads filter bitmask.
+ * Bit 0, for kthreads dump.
+ * Bit 1, for userspace threads dump.
+*/
+#define SHOW_KTHREADS   (1 << 0)
+#define SHOW_APP_THREADS        (1 << 1)
+
+/*
+ * Only dump TASK_* and SHOW_* tasks. (0, 3) for all tasks.
  */
-extern void show_state_filter(unsigned long state_filter);
+extern void show_state_filter(unsigned long state_filter,
+				unsigned long threads_filter);
 
 static inline void show_state(void)
 {
-	show_state_filter(0);
+	show_state_filter(0, SHOW_KTHREADS | SHOW_APP_THREADS);
 }
 
 extern void show_regs(struct pt_regs *);
+
+extern void show_process_mem(unsigned long addr, int nbtyes, const char *name);
+
+extern void show_cpu_current_stack_mem(void);
 
 /*
  * TASK is a pointer to the task whose backtrace we want to see (or NULL for current
@@ -2697,6 +2710,8 @@ static inline unsigned long rlimit_max(unsigned int limit)
 {
 	return task_rlimit_max(current, limit);
 }
+
+u32 cpu_curr_ptr_addr(int cpu);
 
 #endif /* __KERNEL__ */
 

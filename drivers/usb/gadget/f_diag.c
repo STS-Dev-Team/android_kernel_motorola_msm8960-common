@@ -28,7 +28,7 @@
 #include <linux/debugfs.h>
 
 static DEFINE_SPINLOCK(ch_lock);
-static LIST_HEAD(usb_diag_ch_list);
+static LIST_HEAD(legacy_diag_ch_list);
 
 static struct usb_interface_descriptor intf_desc = {
 	.bLength            =	sizeof intf_desc,
@@ -117,12 +117,31 @@ struct diag_context {
 	unsigned configured;
 	struct usb_composite_dev *cdev;
 	int (*update_pid_and_serial_num)(uint32_t, const char *);
-	struct usb_diag_ch ch;
+	struct legacy_diag_ch ch;
 
 	/* pkt counters */
 	unsigned long dpkts_tolaptop;
 	unsigned long dpkts_tomodem;
 	unsigned dpkts_tolaptop_pending;
+};
+
+
+#define STRING_INTERFACE        0
+
+/* static strings, in UTF-8 */
+static struct usb_string diag_string_defs[] = {
+	[STRING_INTERFACE].s = "QC Interface",
+	{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings diag_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              diag_string_defs,
+};
+
+static struct usb_gadget_strings *diag_strings[] = {
+	&diag_string_table,
+	NULL,
 };
 
 static inline struct diag_context *func_to_diag(struct usb_function *f)
@@ -139,7 +158,7 @@ static void usb_config_work_func(struct work_struct *work)
 	struct usb_string *s;
 
 	if (ctxt->ch.notify)
-		ctxt->ch.notify(ctxt->ch.priv, USB_DIAG_CONNECT, NULL);
+		ctxt->ch.notify(ctxt->ch.priv, CHANNEL_DIAG_CONNECT, NULL);
 
 	if (!ctxt->update_pid_and_serial_num)
 		return;
@@ -196,7 +215,7 @@ static void diag_write_complete(struct usb_ep *ep,
 	spin_unlock_irqrestore(&ctxt->lock, flags);
 
 	if (ctxt->ch.notify)
-		ctxt->ch.notify(ctxt->ch.priv, USB_DIAG_WRITE_DONE, d_req);
+		ctxt->ch.notify(ctxt->ch.priv, CHANNEL_DIAG_WRITE_DONE, d_req);
 }
 
 static void diag_read_complete(struct usb_ep *ep,
@@ -216,7 +235,7 @@ static void diag_read_complete(struct usb_ep *ep,
 	ctxt->dpkts_tomodem++;
 
 	if (ctxt->ch.notify)
-		ctxt->ch.notify(ctxt->ch.priv, USB_DIAG_READ_DONE, d_req);
+		ctxt->ch.notify(ctxt->ch.priv, CHANNEL_DIAG_READ_DONE, d_req);
 }
 
 /**
@@ -230,17 +249,17 @@ static void diag_read_complete(struct usb_ep *ep,
  * for CONNECT, DISCONNECT, READ_DONE and WRITE_DONE events.
  *
  */
-struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
+struct legacy_diag_ch *usb_diag_open(const char *name, void *priv,
 		void (*notify)(void *, unsigned, struct diag_request *))
 {
-	struct usb_diag_ch *ch;
+	struct legacy_diag_ch *ch;
 	struct diag_context *ctxt;
 	unsigned long flags;
 	int found = 0;
 
 	spin_lock_irqsave(&ch_lock, flags);
 	/* Check if we already have a channel with this name */
-	list_for_each_entry(ch, &usb_diag_ch_list, list) {
+	list_for_each_entry(ch, &legacy_diag_ch_list, list) {
 		if (!strcmp(name, ch->name)) {
 			found = 1;
 			break;
@@ -261,7 +280,7 @@ struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
 	ch->notify = notify;
 
 	spin_lock_irqsave(&ch_lock, flags);
-	list_add_tail(&ch->list, &usb_diag_ch_list);
+	list_add_tail(&ch->list, &legacy_diag_ch_list);
 	spin_unlock_irqrestore(&ch_lock, flags);
 
 	return ch;
@@ -275,7 +294,7 @@ EXPORT_SYMBOL(usb_diag_open);
  * This function closes the diag channel.
  *
  */
-void usb_diag_close(struct usb_diag_ch *ch)
+void usb_diag_close(struct legacy_diag_ch *ch)
 {
 	struct diag_context *dev = container_of(ch, struct diag_context, ch);
 	unsigned long flags;
@@ -284,7 +303,7 @@ void usb_diag_close(struct usb_diag_ch *ch)
 	ch->priv = NULL;
 	ch->notify = NULL;
 	/* Free-up the resources if channel is no more active */
-	if (!ch->priv_usb) {
+	if (!ch->priv_channel) {
 		list_del(&ch->list);
 		kfree(dev);
 	}
@@ -301,9 +320,9 @@ EXPORT_SYMBOL(usb_diag_close);
  * associated with this channel.
  *
  */
-void usb_diag_free_req(struct usb_diag_ch *ch)
+void usb_diag_free_req(struct legacy_diag_ch *ch)
 {
-	struct diag_context *ctxt = ch->priv_usb;
+	struct diag_context *ctxt = ch->priv_channel;
 	struct usb_request *req;
 	struct list_head *act, *tmp;
 
@@ -335,9 +354,9 @@ EXPORT_SYMBOL(usb_diag_free_req);
  * The buffer is passed by diag char driver.
  *
  */
-int usb_diag_alloc_req(struct usb_diag_ch *ch, int n_write, int n_read)
+int usb_diag_alloc_req(struct legacy_diag_ch *ch, int n_write, int n_read)
 {
-	struct diag_context *ctxt = ch->priv_usb;
+	struct diag_context *ctxt = ch->priv_channel;
 	struct usb_request *req;
 	int i;
 
@@ -382,9 +401,9 @@ EXPORT_SYMBOL(usb_diag_alloc_req);
  * completion of OUT request.
  *
  */
-int usb_diag_read(struct usb_diag_ch *ch, struct diag_request *d_req)
+int usb_diag_read(struct legacy_diag_ch *ch, struct diag_request *d_req)
 {
-	struct diag_context *ctxt = ch->priv_usb;
+	struct diag_context *ctxt = ch->priv_channel;
 	unsigned long flags;
 	struct usb_request *req;
 
@@ -438,9 +457,9 @@ EXPORT_SYMBOL(usb_diag_read);
  * completion of IN request.
  *
  */
-int usb_diag_write(struct usb_diag_ch *ch, struct diag_request *d_req)
+int usb_diag_write(struct legacy_diag_ch *ch, struct diag_request *d_req)
 {
-	struct diag_context *ctxt = ch->priv_usb;
+	struct diag_context *ctxt = ch->priv_channel;
 	unsigned long flags;
 	struct usb_request *req = NULL;
 
@@ -496,7 +515,7 @@ static void diag_function_disable(struct usb_function *f)
 	spin_unlock_irqrestore(&dev->lock, flags);
 
 	if (dev->ch.notify)
-		dev->ch.notify(dev->ch.priv, USB_DIAG_DISCONNECT, NULL);
+		dev->ch.notify(dev->ch.priv, CHANNEL_DIAG_DISCONNECT, NULL);
 
 	usb_ep_disable(dev->in);
 	dev->in->driver_data = NULL;
@@ -557,7 +576,7 @@ static void diag_function_unbind(struct usb_configuration *c,
 		usb_free_descriptors(f->hs_descriptors);
 
 	usb_free_descriptors(f->descriptors);
-	ctxt->ch.priv_usb = NULL;
+	ctxt->ch.priv_channel = NULL;
 }
 
 static int diag_function_bind(struct usb_configuration *c,
@@ -610,12 +629,17 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 			int (*update_pid)(uint32_t, const char *))
 {
 	struct diag_context *dev;
-	struct usb_diag_ch *_ch;
-	int found = 0, ret;
+	struct legacy_diag_ch *_ch;
+	int found = 0, ret, status = -1;
 
 	DBG(c->cdev, "diag_function_add\n");
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		diag_string_defs[STRING_INTERFACE].id = status;
+		intf_desc.iInterface = status;
+	}
 
-	list_for_each_entry(_ch, &usb_diag_ch_list, list) {
+	list_for_each_entry(_ch, &legacy_diag_ch_list, list) {
 		if (!strcmp(name, _ch->name)) {
 			found = 1;
 			break;
@@ -628,7 +652,7 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 
 	dev = container_of(_ch, struct diag_context, ch);
 	/* claim the channel for this USB interface */
-	_ch->priv_usb = dev;
+	_ch->priv_channel = dev;
 
 	dev->update_pid_and_serial_num = update_pid; 
 	dev->cdev = c->cdev;
@@ -639,6 +663,7 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 	dev->function.unbind = diag_function_unbind;
 	dev->function.set_alt = diag_function_set_alt;
 	dev->function.disable = diag_function_disable;
+        dev->function.strings = diag_strings;
 	spin_lock_init(&dev->lock);
 	INIT_LIST_HEAD(&dev->read_pool);
 	INIT_LIST_HEAD(&dev->write_pool);
@@ -647,7 +672,7 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 	ret = usb_add_function(c, &dev->function);
 	if (ret) {
 		INFO(c->cdev, "usb_add_function failed\n");
-		_ch->priv_usb = NULL;
+		_ch->priv_channel = NULL;
 	}
 
 	return ret;
@@ -662,12 +687,12 @@ static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
 {
 	char *buf = debug_buffer;
 	int temp = 0;
-	struct usb_diag_ch *ch;
+	struct legacy_diag_ch *ch;
 
-	list_for_each_entry(ch, &usb_diag_ch_list, list) {
+	list_for_each_entry(ch, &legacy_diag_ch_list, list) {
 		struct diag_context *ctxt;
 
-		ctxt = ch->priv_usb;
+		ctxt = ch->priv_channel;
 
 		temp += scnprintf(buf + temp, PAGE_SIZE - temp,
 				"---Name: %s---\n"
@@ -688,12 +713,12 @@ static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
 static ssize_t debug_reset_stats(struct file *file, const char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	struct usb_diag_ch *ch;
+	struct legacy_diag_ch *ch;
 
-	list_for_each_entry(ch, &usb_diag_ch_list, list) {
+	list_for_each_entry(ch, &legacy_diag_ch_list, list) {
 		struct diag_context *ctxt;
 
-		ctxt = ch->priv_usb;
+		ctxt = ch->priv_channel;
 
 		ctxt->dpkts_tolaptop = 0;
 		ctxt->dpkts_tomodem = 0;
@@ -734,13 +759,15 @@ static void diag_cleanup(void)
 {
 	struct diag_context *dev;
 	struct list_head *act, *tmp;
-	struct usb_diag_ch *_ch;
+	struct legacy_diag_ch *_ch;
 	unsigned long flags;
 
+#if defined(CONFIG_DEBUG_FS)
 	debugfs_remove_recursive(dent_diag);
+#endif
 
-	list_for_each_safe(act, tmp, &usb_diag_ch_list) {
-		_ch = list_entry(act, struct usb_diag_ch, list);
+	list_for_each_safe(act, tmp, &legacy_diag_ch_list) {
+		_ch = list_entry(act, struct legacy_diag_ch, list);
 		dev = container_of(_ch, struct diag_context, ch);
 
 		spin_lock_irqsave(&ch_lock, flags);

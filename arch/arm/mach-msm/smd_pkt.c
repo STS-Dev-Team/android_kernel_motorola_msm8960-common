@@ -676,9 +676,11 @@ int smd_pkt_open(struct inode *inode, struct file *file)
 			r = -ETIMEDOUT;
 
 		if (r < 0) {
+			smd_pkt_devp->ch = 0;
 			pr_err("%s: wait failed for smd open: %d\n",
 			       __func__, r);
 		} else if (!smd_pkt_devp->is_open) {
+			smd_pkt_devp->ch = 0;
 			pr_err("%s: Invalid open notification\n", __func__);
 			r = -ENODEV;
 		} else {

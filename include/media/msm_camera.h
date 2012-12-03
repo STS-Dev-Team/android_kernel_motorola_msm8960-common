@@ -25,9 +25,35 @@
 #include <linux/time.h>
 #endif
 
+#include "msm_camera_query.h"
+
 #ifdef __KERNEL__
 #include <linux/ion.h>
 #endif
+
+#define VFE_FRAME_NUM_MAX	0x00FFFFFF
+#define ZERO_OUT_FRAME		0xFF000000
+#define CLEAR_FOCUS_BIT		0x7FFFFFFF
+#define get_focus_bit(x) ({ \
+	(x & 0x80000000) >> 31; \
+})
+#define get_frame_num(x) ({ \
+	x & VFE_FRAME_NUM_MAX; \
+})
+#define get_focus_in_position(x) ({ \
+	(x & 00000001) << 31; \
+})
+#define increment_frame_num(x) ({ \
+	uint32_t num = get_frame_num(x); \
+	num = num + 1; \
+	(x & ZERO_OUT_FRAME) | num; \
+})
+#define decrement_frame_num(x) ({ \
+	uint32_t num = get_frame_num(x); \
+	num = num - 1; \
+	(x & ZERO_OUT_FRAME) | num; \
+})
+
 #define MSM_CAM_IOCTL_MAGIC 'm'
 
 #define MSM_CAM_IOCTL_GET_SENSOR_INFO \
@@ -188,6 +214,9 @@
 
 #define MSM_CAM_IOCTL_MCTL_DIVERT_DONE \
 	_IOR(MSM_CAM_IOCTL_MAGIC, 52, struct msm_cam_evt_divert_frame *)
+
+#define MCTL_CAM_IOCTL_SET_FOCUS \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 53, uint32_t)
 
 struct msm_mctl_pp_cmd {
 	int32_t  id;
@@ -770,7 +799,16 @@ struct msm_snapshot_pp_status {
 #define CFG_GET_EEPROM_DATA		33
 #define CFG_SET_ACTUATOR_INFO		34
 #define CFG_GET_ACTUATOR_INFO		35
-#define CFG_MAX			36
+#define CFG_SET_LENS_MODE		36
+#define CFG_GET_SNAPSHOTDATA            37
+#define CFG_SET_GAMMA			38
+#define CFG_SET_SHARPENING		39
+#define CFG_SET_LENSSHADING		40
+#define CFG_SET_TARGET_EXPOSURE		41
+#define CFG_GET_MODULE_INFO             42
+#define CFG_SET_FPS_RANGE		43
+#define CFG_GET_CUR_LENS_POS            44
+#define CFG_MAX				45
 
 
 #define MOVE_NEAR	0
@@ -1072,6 +1110,25 @@ struct cord {
 	uint32_t y;
 };
 
+struct snapshotdata {
+	uint32_t exposure_time;
+	int light_source;
+	int metering_mode;
+	int flash;
+};
+
+struct factory_settings {
+	uint8_t gamma_unity;
+	uint8_t lens_shading;
+	uint8_t sharpening;
+	uint8_t target_exposure;
+};
+
+struct fps_range_t {
+	uint16_t max_fps;
+	uint16_t min_fps;
+};
+
 struct sensor_cfg_data {
 	int cfgtype;
 	int mode;
@@ -1109,6 +1166,10 @@ struct sensor_cfg_data {
 		struct cord aec_cord;
 		int is_autoflash;
 		struct mirror_flip mirror_flip;
+		struct factory_settings fact_set;
+		struct snapshotdata data;
+		struct otp_info_t module_info;
+		struct fps_range_t fps_range;
 	} cfg;
 };
 
@@ -1145,6 +1206,8 @@ struct msm_actuator_cfg_data {
 		struct msm_actuator_move_params_t move;
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
+		uint8_t lens_mode;
+		int16_t cur_lens_pos;
 	} cfg;
 };
 

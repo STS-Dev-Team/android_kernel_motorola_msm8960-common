@@ -11,6 +11,22 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+config TOUCHSCREEN_ATMXT
+	tristate "Atmel mXT Touchscreen Driver"
+	depends on I2C
+	help
+	  Say Y here if you have an Atmel mXT touchscreen.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_CYTTSP3
+	tristate "Cypress TrueTouch Generation 3 Touchscreen Driver"
+	depends on I2C
+	help
+          Say Y here if you have a Cypress TrueTouch Generation 3 Touchscreen
+
+	  If unsure, say N.
+
 config TOUCHSCREEN_88PM860X
 	tristate "Marvell 88PM860x touchscreen"
 	depends on MFD_88PM860X
@@ -817,4 +833,23 @@ config TOUCHSCREEN_CYTTSP_I2C
 
          To compile this driver as a module, choose M here: the
          module will be called cyttsp-i2c.
+
+config TOUCHSCREEN_MELFAS100_TS
+	tristate "Melfas MMS-100 based touchscreens"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have a Melfas touchscreen controller.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_DEBUG
+	tristate "Enable/Disable debugging in the touchscreen drivers"
+	default n
+	depends on TOUCHSCREEN_CYTTSP3 || TOUCHSCREEN_ATMXT || TOUCHSCREEN_MELFAS100_TS
+	help
+	  Say Y here only for Cypress-3, Atmel and Melfas-100 touchscreens.
+
+	  If unsure, say N.
+
 endif

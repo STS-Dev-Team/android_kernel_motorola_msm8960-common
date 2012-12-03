@@ -315,10 +315,36 @@ EXPORT_SYMBOL(clk_round_rate);
 
 int clk_set_max_rate(struct clk *clk, unsigned long rate)
 {
+	unsigned long start_rate, flags;
+	int rc;
+
 	if (!clk->ops->set_max_rate)
 		return -ENOSYS;
 
-	return clk->ops->set_max_rate(clk, rate);
+	spin_lock_irqsave(&clk->lock, flags);
+	start_rate = clk_get_rate(clk);
+	if (clk->count && start_rate > rate) {
+		rc = vote_rate_vdd(clk, rate);
+		if (rc)
+			goto err_vote_vdd;
+
+		rc = clk->ops->set_max_rate(clk, rate);
+		if (rc)
+			goto err_set_max_rate;
+
+		unvote_rate_vdd(clk, start_rate);
+	} else {
+		rc = clk->ops->set_max_rate(clk, rate);
+	}
+
+	spin_unlock_irqrestore(&clk->lock, flags);
+	return rc;
+
+err_set_max_rate:
+	unvote_rate_vdd(clk, rate);
+err_vote_vdd:
+	spin_unlock_irqrestore(&clk->lock, flags);
+	return rc;
 }
 EXPORT_SYMBOL(clk_set_max_rate);
 

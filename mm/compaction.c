@@ -715,7 +715,7 @@ static int compact_node(int nid)
 }
 
 /* Compact all nodes in the system */
-static int compact_nodes(void)
+int compact_nodes(void)
 {
 	int nid;
 
@@ -724,6 +724,7 @@ static int compact_nodes(void)
 
 	return COMPACT_COMPLETE;
 }
+EXPORT_SYMBOL(compact_nodes);
 
 /* The written value is actually unused, all memory is compacted */
 int sysctl_compact_memory;

@@ -31,7 +31,12 @@
 #include <linux/pm_runtime.h>
 #include <linux/kernel.h>
 #include <linux/gpio.h>
+#include <linux/emu-accy.h>
 #include "wcd9310.h"
+
+static int cfilt_adjust_ms = 10;
+module_param(cfilt_adjust_ms, int, 0644);
+MODULE_PARM_DESC(cfilt_adjust_ms, "delay after adjusting cfilt voltage in ms");
 
 #define WCD9310_RATES (SNDRV_PCM_RATE_8000|SNDRV_PCM_RATE_16000|\
 			SNDRV_PCM_RATE_32000|SNDRV_PCM_RATE_48000)
@@ -91,6 +96,7 @@ enum {
 static const DECLARE_TLV_DB_SCALE(digital_gain, 0, 1, 0);
 static const DECLARE_TLV_DB_SCALE(line_gain, 0, 7, 1);
 static const DECLARE_TLV_DB_SCALE(analog_gain, 0, 25, 1);
+static int emu_analog_antipop;
 
 enum tabla_bandgap_type {
 	TABLA_BANDGAP_OFF = 0,
@@ -451,6 +457,17 @@ static int tabla_get_iir_band_audio_mixer(
 	return 0;
 }
 
+int tabla_mot_get_emu_audio_state(void)
+{
+	/* yes this is a bit of a hack.  This information should reside in the
+	   card private data so it's accessible by all soc components, but QC
+	   isn't using that mechanism yet and I don't want to add it just for
+	   this one flag
+	*/
+	return emu_analog_antipop;
+}
+
+
 static void set_iir_band_coeff(struct snd_soc_codec *codec,
 				int iir_idx, int band_idx,
 				int coeff_idx, uint32_t value)
@@ -516,6 +533,38 @@ static int tabla_put_iir_band_audio_mixer(
 		get_iir_band_coeff(codec, iir_idx, band_idx, 3),
 		__func__, iir_idx, band_idx,
 		get_iir_band_coeff(codec, iir_idx, band_idx, 4));
+	return 0;
+}
+
+static int snd_soc_get_emu_antipop(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = emu_analog_antipop;
+	return 0;
+}
+
+static int snd_soc_put_emu_antipop(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned short val = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: old value %u; new value %u\n", __func__,
+			emu_analog_antipop, val);
+
+	if (val > 1)
+		return -EINVAL;
+	else if (val == emu_analog_antipop)
+		return 0;
+	emu_analog_antipop = val;
+
+	if (val == 1) {
+		set_mux_ctrl_mode_for_audio(MUXMODE_AUDIO);
+		pr_debug("%s SET EMU TO MUXMODE_AUDIO\n", __func__);
+	} else {
+		set_mux_ctrl_mode_for_audio(MUXMODE_USB);
+		pr_debug("%s SET EMU TO MUXMODE_USB\n", __func__);
+	}
+
 	return 0;
 }
 
@@ -734,6 +783,9 @@ static const struct snd_kcontrol_new tabla_snd_controls[] = {
 	tabla_get_iir_band_audio_mixer, tabla_put_iir_band_audio_mixer),
 	SOC_SINGLE_MULTI_EXT("IIR2 Band5", IIR2, BAND5, 255, 0, 5,
 	tabla_get_iir_band_audio_mixer, tabla_put_iir_band_audio_mixer),
+
+	SOC_SINGLE_BOOL_EXT("EMU Antipop", 0, snd_soc_get_emu_antipop,
+	snd_soc_put_emu_antipop),
 };
 
 static const struct snd_kcontrol_new tabla_1_x_snd_controls[] = {
@@ -1169,9 +1221,12 @@ static int tabla_codec_enable_lineout(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, lineout_gain_reg, 0x40, 0x40);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
-		pr_debug("%s: sleeping 16 ms after %s PA turn on\n",
+		/* Need 64 mSeconds of delay.Since we are using mono
+		differential speaker, need to sleep 32mSeconds for
+		each LINEOUT PA.*/
+		pr_debug("%s: sleeping 32 ms after %s PA turn on\n",
 				__func__, w->name);
-		usleep_range(16000, 16000);
+		usleep_range(32000, 32000);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		snd_soc_update_bits(codec, lineout_gain_reg, 0x40, 0x00);
@@ -1356,26 +1411,26 @@ static void tabla_codec_start_hs_polling(struct snd_soc_codec *codec)
 	}
 	snd_soc_write(codec, TABLA_A_MBHC_SCALING_MUX_1, 0x84);
 
-	if (!tabla->no_mic_headset_override) {
-		if (mbhc_state == MBHC_STATE_POTENTIAL) {
-			pr_debug("%s recovering MBHC state macine\n", __func__);
-			tabla->mbhc_state = MBHC_STATE_POTENTIAL_RECOVERY;
-			/* set to max button press threshold */
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B2_CTL,
-				      0x7F);
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B1_CTL,
-				      0xFF);
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B4_CTL,
-				      (TABLA_IS_1_X(tabla_core->version) ?
-				       0x07 : 0x7F));
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B3_CTL,
-				      0xFF);
-			/* set to max */
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B6_CTL,
-				      0x7F);
-			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B5_CTL,
-				      0xFF);
-		}
+	if (tabla->no_mic_headset_override) {
+		pr_debug("%s setting button threshold to min", __func__);
+		/* set to min */
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B4_CTL, 0x80);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B3_CTL, 0x00);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B6_CTL, 0x80);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B5_CTL, 0x00);
+	} else if (unlikely(mbhc_state == MBHC_STATE_POTENTIAL)) {
+		pr_debug("%s recovering MBHC state machine\n", __func__);
+		tabla->mbhc_state = MBHC_STATE_POTENTIAL_RECOVERY;
+		/* set to max button press threshold */
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B2_CTL, 0x7F);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B1_CTL, 0xFF);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B4_CTL,
+			      (TABLA_IS_1_X(tabla_core->version) ?
+			       0x07 : 0x7F));
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B3_CTL, 0xFF);
+		/* set to max */
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B6_CTL, 0x7F);
+		snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B5_CTL, 0xFF);
 	}
 
 	snd_soc_write(codec, TABLA_A_CDC_MBHC_EN_CTL, 0x1);
@@ -1591,11 +1646,11 @@ static void __tabla_codec_switch_micbias(struct snd_soc_codec *codec,
 			cfilt_k_val = tabla_find_k_value(
 						   tabla->pdata->micbias.ldoh_v,
 						   VDDIO_MICBIAS_MV);
-			usleep_range(10000, 10000);
 			snd_soc_update_bits(codec,
 					    tabla->mbhc_bias_regs.cfilt_val,
 					    0xFC, (cfilt_k_val << 2));
-			usleep_range(10000, 10000);
+			usleep_range(cfilt_adjust_ms * 1000,
+				     cfilt_adjust_ms * 1000);
 			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B1_CTL,
 				      tabla->mbhc_data.adj_v_ins_hu & 0xFF);
 			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B2_CTL,
@@ -1629,7 +1684,8 @@ static void __tabla_codec_switch_micbias(struct snd_soc_codec *codec,
 			snd_soc_update_bits(codec,
 					    tabla->mbhc_bias_regs.cfilt_val,
 					    0xFC, (cfilt_k_val << 2));
-			usleep_range(10000, 10000);
+			usleep_range(cfilt_adjust_ms * 1000,
+				     cfilt_adjust_ms * 1000);
 			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B1_CTL,
 				      tabla->mbhc_data.v_ins_hu & 0xFF);
 			snd_soc_write(codec, TABLA_A_CDC_MBHC_VOLT_B2_CTL,
@@ -1860,12 +1916,15 @@ static int tabla_hphr_dac_event(struct snd_soc_dapm_widget *w,
 	}
 	return 0;
 }
+extern void alsa_to_h2w_headset_report(int state);
 
 static void tabla_snd_soc_jack_report(struct tabla_priv *tabla,
 				      struct snd_soc_jack *jack, int status,
 				      int mask)
 {
 	/* XXX: wake_lock_timeout()? */
+	if (TABLA_JACK_MASK & mask)
+		alsa_to_h2w_headset_report(status ? tabla->current_plug : 0);
 	snd_soc_jack_report_no_dapm(jack, status, mask);
 }
 
@@ -4293,8 +4352,11 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 		mask = tabla_get_button_mask(btn);
 		priv->buttons_pressed |= mask;
 		tabla_lock_sleep(core);
+		/* Shorten delay from 400ms to 10ms for comparability with */
+		/* Motorola's extention for the HS key events like */
+		/* 2 short HS key press = KEY_MEDIA_NEXT */
 		if (schedule_delayed_work(&priv->mbhc_btn_dwork,
-					  msecs_to_jiffies(400)) == 0) {
+					  msecs_to_jiffies(10)) == 0) {
 			WARN(1, "Button pressed twice without release"
 			     "event\n");
 			tabla_unlock_sleep(core);
@@ -5869,9 +5931,15 @@ static ssize_t codec_debug_write(struct file *filp,
 
 	lbuf[cnt] = '\0';
 	buf = (char *)lbuf;
-	tabla->no_mic_headset_override = (*strsep(&buf, " ") == '0') ?
-					     false : true;
-	return rc;
+	TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+	tabla->no_mic_headset_override =
+	    (*strsep(&buf, " ") == '0') ? false : true;
+	if (tabla->no_mic_headset_override && tabla->mbhc_polling_active) {
+		tabla_codec_pause_hs_polling(tabla->codec);
+		tabla_codec_start_hs_polling(tabla->codec);
+	}
+	TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+	return cnt;
 }
 
 static ssize_t codec_mbhc_debug_read(struct file *file, char __user *buf,
@@ -6245,6 +6313,7 @@ static int __init tabla_codec_init(void)
 		rtn = platform_driver_register(&tabla1x_codec_driver);
 		if (rtn != 0)
 			platform_driver_unregister(&tabla_codec_driver);
+		emu_analog_antipop = 0;
 	}
 	return rtn;
 }

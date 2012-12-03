@@ -903,6 +903,7 @@ struct vfe32_ctrl_type {
 	struct vfe32_output_path outpath;
 
 	uint32_t vfeImaskCompositePacked;
+	atomic_t cancel;
 
 	spinlock_t  stop_flag_lock;
 	spinlock_t  update_ack_lock;
@@ -919,6 +920,7 @@ struct vfe32_ctrl_type {
 
 	uint32_t extlen;
 	void *extdata;
+	struct mutex vfe_lock;
 
 	int8_t start_ack_pending;
 	int8_t stop_ack_pending;

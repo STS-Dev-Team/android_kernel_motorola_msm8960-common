@@ -50,8 +50,9 @@
 #define MIPI_DSI_PANEL_WSVGA_PT	4
 #define MIPI_DSI_PANEL_QHD_PT 5
 #define MIPI_DSI_PANEL_WXGA	6
-#define MIPI_DSI_PANEL_WUXGA	7
-#define DSI_PANEL_MAX	7
+#define MIPI_DSI_PANEL_HD	7
+#define MIPI_DSI_PANEL_WUXGA	8
+#define DSI_PANEL_MAX	8
 
 enum {		/* mipi dsi panel */
 	DSI_VIDEO_MODE,
@@ -258,6 +259,8 @@ struct dsi_kickoff_action {
 char *mipi_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen);
 char *mipi_dsi_buf_init(struct dsi_buf *dp);
 void mipi_dsi_init(void);
+void mipi_dsi_lane_cfg(void);
+void mipi_dsi_bist_ctrl(void);
 int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
 int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
 int mipi_dsi_cmds_tx(struct msm_fb_data_type *mfd,
@@ -290,9 +293,16 @@ void mipi_dsi_controller_cfg(int enable);
 void mipi_dsi_sw_reset(void);
 void mipi_dsi_mdp_busy_wait(struct msm_fb_data_type *mfd);
 
+int mipi_reg_write(struct msm_fb_data_type *mfd, __u16 size,
+	__u8 *buf, __u8 use_hs_mode);
+
+int mipi_reg_read(struct msm_fb_data_type *mfd, __u16 address,
+	__u16 size, __u8 *buf, __u8 use_hs_mode);
+
 irqreturn_t mipi_dsi_isr(int irq, void *ptr);
 
 void mipi_set_tx_power_mode(int mode);
+int mipi_get_tx_power_mode(void);
 void mipi_dsi_phy_ctrl(int on);
 void mipi_dsi_phy_init(int panel_ndx, struct msm_panel_info const *panel_info,
 	int target_type);
@@ -304,7 +314,10 @@ void mipi_dsi_ahb_ctrl(u32 enable);
 void cont_splash_clk_ctrl(void);
 void mipi_dsi_turn_on_clks(void);
 void mipi_dsi_turn_off_clks(void);
+int mipi_dsi_get_dsi_status(void);
 
+void mipi_dsi_regs_dump(void);
+void mipi_dsi_clear_dump_flag(void);
 #ifdef CONFIG_FB_MSM_MDP303
 void update_lane_config(struct msm_panel_info *pinfo);
 #endif

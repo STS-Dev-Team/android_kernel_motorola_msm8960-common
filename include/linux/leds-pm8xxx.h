@@ -66,6 +66,9 @@ struct pm8xxx_led_config {
 	int	pwm_channel;
 	u32	pwm_period_us;
 	struct pm8xxx_pwm_duty_cycles *pwm_duty_cycles;
+#ifdef CONFIG_MACH_MSM8960_MMI
+	void (*led_ctrl)(struct device *dev, unsigned on);
+#endif
 };
 
 /**

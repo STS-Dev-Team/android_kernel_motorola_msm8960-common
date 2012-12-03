@@ -56,6 +56,110 @@ static int ram_console_bad_blocks;
 #define ECC_POLY CONFIG_ANDROID_RAM_CONSOLE_ERROR_CORRECTION_POLYNOMIAL
 #endif
 
+struct ram_console_ext_buf {
+	struct list_head list;
+	int size, space;
+	char data[];
+};
+
+struct ram_console_ext_buffer {
+	spinlock_t lock;	/* protect list and buf */
+	struct list_head list;
+	struct ram_console_ext_buf *buf;
+	int total_size;
+	int stop;
+} rs_ext_buf __initdata = {
+	.lock	= __SPIN_LOCK_UNLOCKED(rs_ext_buf.lock),
+	.list	= LIST_HEAD_INIT(rs_ext_buf.list),
+};
+
+int __init ram_console_ext_oldbuf_print(const char *fmt, ...)
+{
+	va_list args;
+	unsigned long flags;
+	int len = 0;
+	char line_buf[512];
+	struct ram_console_ext_buf *buf;
+
+	va_start(args, fmt);
+	len += vsnprintf(line_buf + len, sizeof(line_buf) - len, fmt, args);
+	va_end(args);
+
+	spin_lock_irqsave(&rs_ext_buf.lock, flags);
+	if (rs_ext_buf.stop) {
+		spin_unlock_irqrestore(&rs_ext_buf.lock, flags);
+		pr_err("%s() called too late by %pf()\n", __func__,
+			__builtin_return_address(0));
+		return 0;
+	}
+
+	while (1) {
+		if (!rs_ext_buf.buf) {
+			buf = (struct ram_console_ext_buf *)
+					__get_free_page(GFP_ATOMIC);
+			if (buf) {
+				buf->size = 0;
+				buf->space = PAGE_SIZE - 1 -
+					offsetof(struct ram_console_ext_buf,
+						data);
+				rs_ext_buf.buf = buf;
+			} else {
+				pr_err("%s NOMEM\n", __func__);
+				len = 0;
+				break;
+			}
+		}
+		buf = rs_ext_buf.buf;
+		if (len + 1 > buf->space) {
+			buf->data[buf->size] = '\0';
+			list_add_tail(&buf->list, &rs_ext_buf.list);
+			rs_ext_buf.total_size += buf->size;
+			rs_ext_buf.buf = NULL;
+			continue;
+		}
+		memcpy(&buf->data[buf->size], line_buf, len);
+		buf->space -= len;
+		buf->size += len;
+		break;
+	}
+	spin_unlock_irqrestore(&rs_ext_buf.lock, flags);
+	return len;
+}
+
+static int __init ram_console_ext_oldbuf_print_stop(void)
+{
+	int ret;
+	unsigned long flags;
+	struct ram_console_ext_buf *buf;
+	spin_lock_irqsave(&rs_ext_buf.lock, flags);
+	rs_ext_buf.stop = 1;
+	if (rs_ext_buf.buf) {
+		buf = rs_ext_buf.buf;
+		rs_ext_buf.buf = NULL;
+		buf->data[buf->size] = '\0';
+		list_add_tail(&buf->list, &rs_ext_buf.list);
+		rs_ext_buf.total_size += buf->size;
+	}
+	ret = rs_ext_buf.total_size;
+	spin_unlock_irqrestore(&rs_ext_buf.lock, flags);
+	return ret;
+}
+
+static void __init ram_console_ext_oldbuf_push(char *ptr)
+{
+	unsigned long flags;
+	struct ram_console_ext_buf *buf, *n;
+
+	spin_lock_irqsave(&rs_ext_buf.lock, flags);
+	list_for_each_entry_safe(buf, n, &rs_ext_buf.list, list) {
+		memcpy(ptr, buf->data, buf->size);
+		ptr += buf->size;
+		list_del(&buf->list);
+		free_page((unsigned long)buf);
+	}
+	spin_unlock_irqrestore(&rs_ext_buf.lock, flags);
+}
+
 #ifdef CONFIG_ANDROID_RAM_CONSOLE_ERROR_CORRECTION
 static void ram_console_encode_rs8(uint8_t *data, size_t len, uint8_t *ecc)
 {
@@ -211,6 +315,8 @@ ram_console_save_old(struct ram_console_buffer *buffer, const char *bootinfo,
 		bootinfo_size = strlen(bootinfo) + strlen(bootinfo_label);
 	total_size += bootinfo_size;
 
+	total_size += ram_console_ext_oldbuf_print_stop();
+
 	if (dest == NULL) {
 		dest = kmalloc(total_size, GFP_KERNEL);
 		if (dest == NULL) {
@@ -237,6 +343,7 @@ ram_console_save_old(struct ram_console_buffer *buffer, const char *bootinfo,
 		memcpy(ptr, bootinfo, bootinfo_size);
 		ptr += bootinfo_size;
 	}
+	ram_console_ext_oldbuf_push(ptr);
 }
 
 static int __init ram_console_init(struct ram_console_buffer *buffer,

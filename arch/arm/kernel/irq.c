@@ -53,6 +53,8 @@
 
 unsigned long irq_err_count;
 
+ATOMIC_NOTIFIER_HEAD(touch_watchdog_notifier_head);
+
 int arch_show_interrupts(struct seq_file *p, int prec)
 {
 #ifdef CONFIG_FIQ
@@ -74,6 +76,18 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 void handle_IRQ(unsigned int irq, struct pt_regs *regs)
 {
 	struct pt_regs *old_regs = set_irq_regs(regs);
+
+	/*
+	 * Disable interrupt in oops progress to avoid
+	 * panic over panic in ISR.
+	 */
+	if (oops_in_progress && !smp_processor_id()) {
+		set_irq_regs(old_regs);
+		local_irq_disable();
+		printk(KERN_ERR "In oops,"
+			" interrupt is disabled on IRQ%u\n", irq);
+		return;
+	}
 
 	perf_mon_interrupt_in();
 	irq_enter();

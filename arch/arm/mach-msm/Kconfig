@@ -149,11 +149,12 @@ config ARCH_MSM8960
 	select MSM_SPM_V2
 	select MSM_L2_SPM
 	select MSM_NATIVE_RESTART
-	select DONT_MAP_HOLE_AFTER_MEMBANK0
+	select DONT_MAP_HOLE_IN_LOWMEM
 	select MSM_REMOTE_SPINLOCK_SFPB
 	select ARCH_POPULATES_NODE_MAP
 	select ARCH_SPARSEMEM_ENABLE
 	select ARCH_HAS_HOLES_MEMORYMODEL
+	select ENABLE_DMM
 	select MEMORY_HOTPLUG if ENABLE_DMM
 	select MEMORY_HOTREMOVE if ENABLE_DMM
 	select ARCH_ENABLE_MEMORY_HOTPLUG if ENABLE_DMM
@@ -168,6 +169,7 @@ config ARCH_MSM8960
 	select MULTI_IRQ_HANDLER
 	select MSM_PM8X60 if PM
 	select HOLES_IN_ZONE if SPARSEMEM
+	select MSM_KRAIT_WFE_FIXUP
 
 config ARCH_MSM8930
 	bool "MSM8930"
@@ -205,6 +207,7 @@ config ARCH_MSM8930
 	select MULTI_IRQ_HANDLER
 	select MSM_PM8X60 if PM
 	select HOLES_IN_ZONE if SPARSEMEM
+	select MSM_KRAIT_WFE_FIXUP
 
 config ARCH_APQ8064
 	bool "APQ8064"
@@ -222,6 +225,7 @@ config ARCH_APQ8064
 	select MULTI_IRQ_HANDLER
 	select MSM_PM8X60 if PM
 	select HOLES_IN_ZONE if SPARSEMEM
+	select MSM_KRAIT_WFE_FIXUP
 
 config ARCH_MSMCOPPER
 	bool "MSM Copper"
@@ -306,6 +310,9 @@ config  ARCH_MSM_SCORPIONMP
 config  ARCH_MSM_KRAITMP
 	select ARCH_MSM_KRAIT
 	select MSM_SMP
+	bool
+
+config  MSM_KRAIT_WFE_FIXUP
 	bool
 
 config  ARCH_MSM_CORTEX_A5
@@ -669,6 +676,14 @@ config MACH_MSM9615_MTP
 	bool "MSM9615 MTP"
 	help
 	  Support for the Qualcomm MSM9615 MTP device.
+
+config MACH_MSM8960_MMI
+	depends on ARCH_MSM8960
+	bool "MSM8960 MMI"
+	select USE_OF
+	select OF_FLATTREE_HOST_BYTEORDER
+	help
+	  Support for Motorola Mobility MSM8960 devices.
 
 config MSM_USE_TSIF1
 	depends on ARCH_MSM8X60
@@ -1701,6 +1716,13 @@ config MSM_LPASS_8960
 	 lpass hardware watchdog interrupt lines and plugs into the subsystem
 	 restart and PIL drivers. For MSM9615, it only supports a full chip reset.
 
+config KERNEL_PMEM_AUDIO_MMI
+	tristate "MSM 8960 PMEM AUDIO"
+	depends on (ARCH_MSM8960 || ARCH_MSM9615)
+	help
+	 This option disables use of the AUDIO related ION heap and leaves the pmem_audio
+	 allocation support enabled for the MSM8960 and MSM9615.
+
 config MSM_WCNSS_SSR_8960
 	tristate "MSM 8960 WCNSS restart module"
 	depends on (ARCH_MSM8960)
@@ -1841,6 +1863,15 @@ config MSM_WATCHDOG
 		core 0's watchdog, and reset the entire SoC if it times out. It does
 		not run during the bootup process, so it will not catch any early
 		lockups.
+
+config MSM_WATCHDOG_CTX_PRINT
+	bool "Print context dump saved by secure mode watchdog handler"
+	default n
+	depends on MSM_WATCHDOG
+	---help---
+		After enabling this option, kernel will reserve bigger buffer
+		for secure mode watchdog handler to save info. And kernel will
+		try to print the info if it looks valid.
 
 config MSM_DLOAD_MODE
 	bool "Enable download mode on crashes"
@@ -2038,12 +2069,12 @@ config MSM_CACHE_ERP
 	  For production builds, you should probably say 'N' here.
 
 config MSM_L1_ERR_PANIC
-	bool "Panic on L1 cache / TLB errors"
+	bool "Panic on L1 cache errors"
 	depends on MSM_CACHE_ERP
 	help
-	  To cause the kernel to panic whenever an L1 cache or TLB error is
-	  detected, say 'Y' here. This may be useful as a debugging technique if
-	  general system instability is suspected.
+	  To cause the kernel to panic whenever an L1 cache error is detected, say
+	  'Y' here. This may be useful as a debugging technique if general system
+	  instability is suspected.
 
 	  For production builds, you should probably say 'N' here.
 
@@ -2110,6 +2141,14 @@ config MSM_CACHE_DUMP
 	  Add infrastructure to dump the L1 and L2 caches to an allocated buffer.
 	  This allows for analysis of the caches in case cache corruption is
 	  suspected.
+
+config HOB_SHARED_RAM_MMI
+	depends on ARCH_MSM
+	default n
+	bool "Motorola Mobility HOB RAM MMAP Client"
+	help
+	  Provide mechanism to access hob storage shared memory on apps processor.
+	  HOB or the HandOver Block is the staging area for Phasing Data.
 
 config MSM_DCVS
 	bool "Use MSM DCVS for CPU/GPU Frequency control"

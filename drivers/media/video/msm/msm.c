@@ -174,7 +174,7 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 	D("Waiting for config status\n");
 	rc = wait_event_interruptible_timeout(queue->wait,
 		!list_empty_careful(&queue->list),
-		out->timeout_ms);
+		msecs_to_jiffies(out->timeout_ms));
 	D("Waiting is over for config status\n");
 	if (list_empty_careful(&queue->list)) {
 		if (!rc)
@@ -193,8 +193,12 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 
 	ctrlcmd = (struct msm_ctrl_cmd *)(rcmd->command);
 	value = out->value;
-	if (ctrlcmd->length > 0)
+	if ((ctrlcmd->length > 0) && (out->length >= ctrlcmd->length))
 		memcpy(value, ctrlcmd->value, ctrlcmd->length);
+	else if (ctrlcmd->length > 0) {
+		pr_err("%s: Error - command length mismatch out=%d/cmd=%d\n",
+			__func__, out->length, ctrlcmd->length);
+	}
 
 	memcpy(out, ctrlcmd, sizeof(struct msm_ctrl_cmd));
 	out->value = value;
@@ -1264,6 +1268,11 @@ static int msm_camera_v4l2_s_parm(struct file *f, void *pctx,
 	pcam_inst = container_of(f->private_data,
 		struct msm_cam_v4l2_dev_inst, eventHandle);
 	pcam_inst->image_mode = a->parm.capture.extendedmode;
+	if (pcam_inst->pcam->dev_inst_map[pcam_inst->image_mode]) {
+		pr_err("%s Stream type %d already streaming. Return Busy ",
+				__func__, pcam_inst->image_mode);
+		return -EBUSY;
+	}
 	pcam_inst->pcam->dev_inst_map[pcam_inst->image_mode] = pcam_inst;
 	pcam_inst->path = msm_vidbuf_get_path(pcam_inst->image_mode);
 	D("%spath=%d,rc=%d\n", __func__,
@@ -2067,13 +2076,9 @@ static int msm_close_server(struct inode *inode, struct file *fp)
 	struct v4l2_event_subscription sub;
 	D("%s\n", __func__);
 	mutex_lock(&g_server_dev.server_lock);
-	if (g_server_dev.use_count > 0)
-		g_server_dev.use_count--;
-	mutex_unlock(&g_server_dev.server_lock);
-	if (g_server_dev.use_count == 0) {
+	if ((g_server_dev.use_count > 0) && (--g_server_dev.use_count == 0)) {
 		if (g_server_dev.pcam_active) {
 			struct v4l2_event v4l2_ev;
-			mutex_lock(&g_server_dev.server_lock);
 
 			v4l2_ev.type = V4L2_EVENT_PRIVATE_START
 				+ MSM_CAM_APP_NOTIFY_ERROR_EVENT;
@@ -2081,10 +2086,17 @@ static int msm_close_server(struct inode *inode, struct file *fp)
 			v4l2_event_queue(
 				g_server_dev.pcam_active->pvdev, &v4l2_ev);
 		}
-	sub.type = V4L2_EVENT_ALL;
-	msm_server_v4l2_unsubscribe_event(
-		&g_server_dev.server_command_queue.eventHandle, &sub);
+
+		sub.type = V4L2_EVENT_ALL;
+		msm_server_v4l2_unsubscribe_event(
+				&g_server_dev.server_command_queue.eventHandle, &sub);
+
+
+		/* NOTE: Return without unlocking mutex per QC's design.
+		   Mutex is unlocked in msm_close. */
+		return 0;
 	}
+	mutex_unlock(&g_server_dev.server_lock);
 	return 0;
 }
 
@@ -2095,8 +2107,8 @@ static long msm_v4l2_evt_notify(struct msm_cam_media_controller *mctl,
 	struct v4l2_event v4l2_ev;
 	struct msm_cam_v4l2_device *pcam = NULL;
 
-	if (!mctl) {
-		pr_err("%s: mctl is NULL\n", __func__);
+	if (!mctl || (NULL == g_server_dev.pcam_active)) {
+		pr_err("%s: __mot_deb mctl/pcam_active is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -2105,7 +2117,8 @@ static long msm_v4l2_evt_notify(struct msm_cam_media_controller *mctl,
 		ERR_COPY_FROM_USER();
 		return -EFAULT;
 	}
-
+	D("%s: Sending event to HAL with type %x\n",
+	       __func__, v4l2_ev.type);
 	pcam = mctl->sync.pcam_sync;
 	ktime_get_ts(&v4l2_ev.timestamp);
 	v4l2_event_queue(pcam->pvdev, &v4l2_ev);
@@ -2254,6 +2267,15 @@ static long msm_ioctl_config(struct file *fp, unsigned int cmd,
 			rc = -EINVAL;
 		break;
 
+	case MCTL_CAM_IOCTL_SET_FOCUS:
+		if (copy_from_user(&config_cam->p_mctl->sync.focus_state,
+			(void __user *)arg, sizeof(uint32_t))) {
+			ERR_COPY_FROM_USER();
+			rc = -EINVAL;
+			break;
+		}
+		break;
+
 	default:{
 		/* For the rest of config command, forward to media controller*/
 		struct msm_cam_media_controller *p_mctl = config_cam->p_mctl;
@@ -2318,6 +2340,11 @@ static int msm_open_config(struct inode *inode, struct file *fp)
 		pr_err("%s: nonseekable_open error %d\n", __func__, rc);
 		return rc;
 	}
+	if (!g_server_dev.pcam_active) {
+		pr_err("%s: pcam_active is NULL\n", __func__);
+		return -ENODEV;
+	}
+
 	config_cam->use_count++;
 
 	/*config_cam->isp_subdev = g_server_dev.pcam_active->mctl.isp_sdev;*/

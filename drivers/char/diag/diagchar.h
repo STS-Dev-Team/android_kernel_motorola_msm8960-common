@@ -18,12 +18,20 @@
 #include <linux/mempool.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
+#include <linux/diagchar.h>
 #include <mach/msm_smd.h>
 #include <asm/atomic.h>
 #include <asm/mach-types.h>
+#ifdef CONFIG_DIAG_OVER_USB
+#include <mach/usbdiag.h>
+#endif
+#ifdef CONFIG_DIAG_INTERNAL
+#include <mach/tty_diag.h>
+#endif
 /* Size of the USB buffers used for read and write*/
-#define USB_MAX_OUT_BUF 4096
-#define APPS_BUF_SIZE	2000
+#define MAX_OUT_BUF 4096
+#define APPS_BUF_SIZE  2000
+#define USB_MAX_OUT_BUF	MAX_OUT_BUF
 #define IN_BUF_SIZE		16384
 #define MAX_IN_BUF_SIZE	32768
 #define MAX_SYNC_OBJ_NAME_SIZE	32
@@ -45,7 +53,7 @@
 #define APPS_PROC		1
 #define QDSP_PROC		2
 #define WCNSS_PROC		3
-#define MSG_MASK_SIZE 9500
+#define MSG_MASK_SIZE 10000
 #define LOG_MASK_SIZE 8000
 #define EVENT_MASK_SIZE 1000
 #define USER_SPACE_DATA 8000
@@ -106,7 +114,7 @@ struct diag_client_map {
 };
 
 /* This structure is defined in USB header file */
-#ifndef CONFIG_DIAG_OVER_USB
+#if !defined(CONFIG_DIAG_OVER_USB) && !defined(CONFIG_DIAG_INTERNAL)
 struct diag_request {
 	char *buf;
 	int length;
@@ -165,7 +173,7 @@ struct diagchar_dev {
 	unsigned char *buf_in_qdsp_cntl;
 	unsigned char *buf_in_wcnss;
 	unsigned char *buf_in_wcnss_cntl;
-	unsigned char *usb_buf_out;
+	unsigned char *buf_out;
 	unsigned char *apps_rsp_buf;
 	unsigned char *user_space_data;
 	/* buffer for updating mask to peripherals */
@@ -187,9 +195,10 @@ struct diagchar_dev {
 	unsigned char *hdlc_buf;
 	unsigned hdlc_count;
 	unsigned hdlc_escape;
-#ifdef CONFIG_DIAG_OVER_USB
-	int usb_connected;
-	struct usb_diag_ch *legacy_ch;
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
+	struct legacy_diag_ch *legacy_ch;
+	int channel_connected;
+	int usb_req_allocated;
 	struct work_struct diag_proc_hdlc_work;
 	struct work_struct diag_read_work;
 #endif
@@ -214,7 +223,7 @@ struct diagchar_dev {
 	int pkt_length;
 	struct diag_request *write_ptr_1;
 	struct diag_request *write_ptr_2;
-	struct diag_request *usb_read_ptr;
+	struct diag_request *channel_read_ptr;
 	struct diag_request *write_ptr_svc;
 	struct diag_request *write_ptr_qdsp_1;
 	struct diag_request *write_ptr_qdsp_2;
@@ -249,7 +258,7 @@ struct diagchar_dev {
 	int in_busy_hsic_write;
 	int in_busy_hsic_read;
 	int usb_mdm_connected;
-	struct usb_diag_ch *mdm_ch;
+	struct legacy_diag_ch *mdm_ch;
 	struct workqueue_struct *diag_hsic_wq;
 	struct work_struct diag_read_mdm_work;
 	struct work_struct diag_read_hsic_work;

@@ -1234,6 +1234,25 @@ failed:
 	return err;
 }
 
+static u8 link_to_mgmt(u8 link_type, u8 addr_type)
+{
+	switch (link_type) {
+	case LE_LINK:
+		switch (addr_type) {
+		case ADDR_LE_DEV_PUBLIC:
+			return MGMT_ADDR_LE_PUBLIC;
+		case ADDR_LE_DEV_RANDOM:
+			return MGMT_ADDR_LE_RANDOM;
+		default:
+			return MGMT_ADDR_INVALID;
+		}
+	case ACL_LINK:
+		return MGMT_ADDR_BREDR;
+	default:
+		return MGMT_ADDR_INVALID;
+	}
+}
+
 static int get_connections(struct sock *sk, u16 index)
 {
 	struct mgmt_rp_get_connections *rp;
@@ -1561,7 +1580,7 @@ static void pairing_connect_complete_cb(struct hci_conn *conn, u8 status)
 		return;
 	}
 
-	if (status)
+	if (status || conn->pending_sec_level < BT_SECURITY_MEDIUM)
 		pairing_complete(cmd, status);
 
 	hci_conn_put(conn);
@@ -2604,6 +2623,20 @@ int mgmt_connected(u16 index, bdaddr_t *bdaddr, u8 le)
 	return mgmt_event(MGMT_EV_CONNECTED, index, &ev, sizeof(ev), NULL);
 }
 
+int mgmt_le_conn_params(u16 index, bdaddr_t *bdaddr, u16 interval,
+						u16 latency, u16 timeout)
+{
+	struct mgmt_ev_le_conn_params ev;
+
+	bacpy(&ev.bdaddr, bdaddr);
+	ev.interval = interval;
+	ev.latency = latency;
+	ev.timeout = timeout;
+
+	return mgmt_event(MGMT_EV_LE_CONN_PARAMS, index, &ev, sizeof(ev),
+									NULL);
+}
+
 static void disconnect_rsp(struct pending_cmd *cmd, void *data)
 {
 	struct mgmt_cp_disconnect *cp = cmd->param;
@@ -2945,8 +2978,8 @@ void mgmt_read_rssi_complete(u16 index, s8 rssi, bdaddr_t *bdaddr,
 }
 
 
-int mgmt_device_found(u16 index, bdaddr_t *bdaddr, u8 type, u8 le,
-			u8 *dev_class, s8 rssi, u8 eir_len, u8 *eir)
+int mgmt_device_found(u16 index, bdaddr_t *bdaddr, u8 link_type, u8 addr_type,
+			u8 le, u8 *dev_class, s8 rssi, u8 eir_len, u8 *eir)
 {
 	struct mgmt_ev_device_found ev;
 	struct hci_dev *hdev;
@@ -2956,9 +2989,9 @@ int mgmt_device_found(u16 index, bdaddr_t *bdaddr, u8 type, u8 le,
 
 	memset(&ev, 0, sizeof(ev));
 
-	bacpy(&ev.bdaddr, bdaddr);
+	bacpy(&ev.addr.bdaddr, bdaddr);
+	ev.addr.type = link_to_mgmt(link_type, addr_type);
 	ev.rssi = rssi;
-	ev.type = type;
 	ev.le = le;
 
 	if (dev_class)

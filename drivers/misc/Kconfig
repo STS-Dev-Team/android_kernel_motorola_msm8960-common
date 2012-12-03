@@ -347,6 +347,15 @@ config ISL29020
 	  This driver can also be built as a module.  If so, the module
 	  will be called isl29020.
 
+config VIB_TIMED
+	bool "Timed Output based Vibrator"
+	depends on ANDROID_TIMED_OUTPUT
+	default n
+
+config MOT_CONFIG
+	tristate  "Motorola Configuration read/write support "
+	default n
+
 config SENSORS_TSL2550
 	tristate "Taos TSL2550 ambient light sensor"
 	depends on I2C && SYSFS
@@ -521,9 +530,24 @@ config APANIC
 	 Driver which handles kernel panics and attempts to write
 	 critical debugging data to flash.
 
+config APANIC_MMC
+	bool "Android kernel panic diagnostics driver on mmc"
+	default n
+	---help---
+	 Driver which handles kernel panics and attempts to write
+	 critical debugging data through mmc.
+
+config APANIC_MMC_MEMDUMP
+	bool "Android memory dump driver on mmc"
+	depends on APANIC_MMC
+	default n
+	---help---
+	 Driver which handles kernel panics and attempts to write
+	 full memory dump through mmc.
+
 config APANIC_PLABEL
 	string "Android panic dump flash partition label"
-	depends on APANIC
+	depends on APANIC || APANIC_MMC
 	default "kpanic"
 	---help---
 	 If your platform uses a different flash partition label for storing
@@ -650,5 +674,6 @@ source "drivers/misc/iwmc3200top/Kconfig"
 source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
+source "drivers/misc/sec/Kconfig"
 
 endif # MISC_DEVICES

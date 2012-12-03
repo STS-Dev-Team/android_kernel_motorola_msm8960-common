@@ -254,12 +254,17 @@ static void watchdog_interrupt_count(void)
 static inline void watchdog_interrupt_count(void) { return; }
 #endif /* CONFIG_HARDLOCKUP_DETECTOR */
 
+static DEFINE_SPINLOCK(wdt_lock);
+
+extern int is_csd_lock_waiting(void);
+
 /* watchdog kicker functions */
 static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 {
 	unsigned long touch_ts = __this_cpu_read(watchdog_touch_ts);
 	struct pt_regs *regs = get_irq_regs();
 	int duration;
+	unsigned long flags;
 
 	/* kick the hardlockup detector */
 	watchdog_interrupt_count();
@@ -295,6 +300,9 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 		if (__this_cpu_read(soft_watchdog_warn) == true)
 			return HRTIMER_RESTART;
 
+		spin_lock_irqsave(&wdt_lock, flags);
+		atomic_notifier_call_chain(
+			&touch_watchdog_notifier_head, 0, NULL);
 		printk(KERN_ERR "BUG: soft lockup - CPU#%d stuck for %us! [%s:%d]\n",
 			smp_processor_id(), duration,
 			current->comm, task_pid_nr(current));
@@ -302,11 +310,20 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 		print_irqtrace_events(current);
 		if (regs)
 			show_regs(regs);
+#ifdef CONFIG_FRAME_POINTER
 		else
+#endif
 			dump_stack();
+
+		if(is_csd_lock_waiting()) {
+			show_cpu_current_stack_mem();
+			printk(KERN_ERR "softlockup: trigger watchdog reset!\n");
+			while(1);
+		}
 
 		if (softlockup_panic)
 			panic("softlockup: hung tasks");
+		spin_unlock_irqrestore(&wdt_lock, flags);
 		__this_cpu_write(soft_watchdog_warn, true);
 	} else
 		__this_cpu_write(soft_watchdog_warn, false);

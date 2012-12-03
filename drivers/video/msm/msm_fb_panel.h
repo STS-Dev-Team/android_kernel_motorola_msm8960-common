@@ -132,6 +132,9 @@ struct mipi_panel_info {
 	uint32 xres_pad;
 	/* Pad height */
 	uint32 yres_pad;
+#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
+	struct mutex panel_mutex;
+#endif
 };
 
 struct msm_panel_info {
@@ -152,6 +155,8 @@ struct msm_panel_info {
 	__u32 clk_max;
 	__u32 frame_count;
 	__u32 is_3d_panel;
+	__u32 physical_width_mm;
+	__u32 physical_height_mm;
 
 
 	struct mddi_panel_info mddi;
@@ -173,11 +178,14 @@ struct msm_fb_panel_data {
 	void (*set_rect) (int x, int y, int xres, int yres);
 	void (*set_vsync_notifier) (msm_fb_vsync_handler_type, void *arg);
 	void (*set_backlight) (struct msm_fb_data_type *);
+	void (*set_backlight_curve) (struct msm_fb_data_type *);
 
 	/* function entry chain */
 	int (*on) (struct platform_device *pdev);
 	int (*off) (struct platform_device *pdev);
+	int (*panel_on) (struct platform_device *pdev);
 	int (*power_ctrl) (boolean enable);
+	int (*panel_off) (struct platform_device *pdev);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
 };
@@ -189,6 +197,7 @@ struct platform_device *msm_fb_device_alloc(struct msm_fb_panel_data *pdata,
 						u32 type, u32 id);
 int panel_next_on(struct platform_device *pdev);
 int panel_next_off(struct platform_device *pdev);
+int panel_next_panel_on(struct platform_device *pdev);
 
 int lcdc_device_register(struct msm_panel_info *pinfo);
 
