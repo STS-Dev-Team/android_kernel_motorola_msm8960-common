@@ -1456,6 +1456,7 @@ int mipi_dsi_cmds_rx_new(struct dsi_buf *tp, struct dsi_buf *rp,
 
 int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 {
+
 	unsigned long flags;
 
 #ifdef DSI_HOST_DEBUG

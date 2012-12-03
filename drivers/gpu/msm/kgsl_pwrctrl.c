@@ -622,6 +622,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		}
 	}
 
+
 	pm_runtime_enable(device->parentdev);
 	register_early_suspend(&device->display_off);
 	return result;
@@ -841,7 +842,6 @@ _slumber(struct kgsl_device *device)
 	case KGSL_STATE_ACTIVE:
 		if (!device->ftbl->isidle(device)) {
 			kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
-			device->pwrctrl.restore_slumber = true;
 			return -EBUSY;
 		}
 		/* fall through */

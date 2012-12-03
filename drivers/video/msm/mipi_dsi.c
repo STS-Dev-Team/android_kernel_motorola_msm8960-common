@@ -45,7 +45,6 @@ static int mipi_dsi_remove(struct platform_device *pdev);
 
 static int mipi_dsi_off(struct platform_device *pdev);
 static int mipi_dsi_on(struct platform_device *pdev);
-static int mipi_dsi_panel_on(struct platform_device *pdev);
 
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
@@ -64,11 +63,6 @@ static struct platform_driver mipi_dsi_driver = {
 
 struct device dsi_dev;
 
-static int mipi_dsi_panel_on(struct platform_device *pdev)
-{
-	return panel_next_panel_on(pdev);
-}
-
 static int mipi_dsi_off(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -85,9 +79,7 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	else
 		down(&mfd->dma->mutex);
 
-	/* DSI is in the suspend state, don't need to do anything */
-	if (mdp4_overlay_dsi_state_get() == ST_DSI_SUSPEND)
-		goto end;
+	pr_info("entering %s\n", __func__);
 
 	mdp4_overlay_dsi_state_set(ST_DSI_SUSPEND);
 
@@ -135,7 +127,7 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	mipi_dsi_unprepare_clocks();
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
 		mipi_dsi_pdata->dsi_power_save(0);
-end:
+
 	if (mdp_rev >= MDP_REV_41)
 		mutex_unlock(&mfd->dma->ov_mutex);
 	else
@@ -159,7 +151,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	u32 ystride, bpp, data;
 	u32 dummy_xres, dummy_yres;
 	int target_type = 0;
-	int old_nice = 0;
 
 	pr_debug("Start of %s:....\n", __func__);
 
@@ -179,12 +170,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
-
-	mipi  = &mfd->panel_info.mipi;
-	/* Clean up the force clk lane to enter HS from previous boot */
-	if ((mfd->panel_info.type == MIPI_VIDEO_PANEL) &&
-							mipi->force_clk_lane_hs)
-		MIPI_OUTP(MIPI_DSI_BASE + 0x00a8, 0);
 
 	mipi_dsi_phy_ctrl(1);
 
@@ -207,6 +192,7 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	width = mfd->panel_info.xres;
 	height = mfd->panel_info.yres;
 
+	mipi  = &mfd->panel_info.mipi;
 	if (mfd->panel_info.type == MIPI_VIDEO_PANEL) {
 		dummy_xres = mfd->panel_info.lcdc.xres_pad;
 		dummy_yres = mfd->panel_info.lcdc.yres_pad;
@@ -264,22 +250,7 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	mipi_dsi_host_init(mipi);
 
-	/*
-	 * The MIPI host is done with INIT now, the lines are at LP-11,
-	 * and it is safe to turn on the power to the panel and get it out
-	 * of reset
-	 */
-
-	if (mipi_dsi_pdata && mipi_dsi_pdata->panel_power_save)
-		mipi_dsi_pdata->panel_power_save(1);
-
-	if (mdp_rev >= MDP_REV_41)
-		mutex_lock(&mfd->dma->ov_mutex);
-	else
-		down(&mfd->dma->mutex);
-
-	if ((mfd->panel_info.type == MIPI_VIDEO_PANEL) &&
-						mipi->force_clk_lane_hs) {
+	if (mipi->force_clk_lane_hs) {
 		u32 tmp;
 
 		tmp = MIPI_INP(MIPI_DSI_BASE + 0xA8);
@@ -356,15 +327,10 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	else
 		up(&mfd->dma->mutex);
 
-	/* Restore current priority */
-	if (old_nice > -20)
-		set_user_nice(current, old_nice);
-
 	pr_debug("End of %s....:\n", __func__);
 
 	return ret;
 }
-
 
 static int mipi_dsi_resource_initialized;
 
@@ -512,7 +478,6 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 	pdata = mdp_dev->dev.platform_data;
 	pdata->on = mipi_dsi_on;
 	pdata->off = mipi_dsi_off;
-	pdata->panel_on = mipi_dsi_panel_on;
 	pdata->next = pdev;
 
 	/*
@@ -525,10 +490,6 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 		mfd->dest = DISPLAY_LCDC;
 	else
 		mfd->dest = DISPLAY_LCD;
-
-#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
-	mutex_init(&mfd->panel_info.mipi.panel_mutex);
-#endif
 
 	if (mdp_rev == MDP_REV_303 &&
 		mipi_dsi_pdata->get_lane_config) {
@@ -625,7 +586,7 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 
 	pdev_list[pdev_list_cnt++] = pdev;
 
-	return 0;
+return 0;
 
 mipi_dsi_probe_err:
 	platform_device_put(mdp_dev);
