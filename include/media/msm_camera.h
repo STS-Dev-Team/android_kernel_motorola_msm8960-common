@@ -617,6 +617,7 @@ struct msm_frame {
 
 	struct ion_allocation_data ion_alloc;
 	struct ion_fd_data fd_data;
+	int ion_dev_fd;
 };
 
 enum msm_st_frame_packing {
@@ -1308,5 +1309,9 @@ struct img_plane_info {
 	uint32_t sp_y_offset;
 	uint8_t vpe_can_use;
 };
+
+#define QCAMERA_NAME "qcamera"
+#define QCAMERA_DEVICE_GROUP_ID 1
+#define QCAMERA_VNODE_GROUP_ID 2
 
 #endif /* __LINUX_MSM_CAMERA_H */

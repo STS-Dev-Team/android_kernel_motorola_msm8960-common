@@ -499,29 +499,6 @@ static int msm_fb_remove(struct platform_device *pdev)
 
 	return 0;
 }
-#ifdef CONFIG_FB_MSM_MIPI_DSI_MOT
-static void lock_panel_mutex(struct msm_fb_data_type *mfd)
-{
-	if (mfd->panel_info.mipi.dsi_phy_db != NULL)
-		mutex_lock(&mfd->panel_info.mipi.panel_mutex);
-}
-
-static void unlock_panel_mutex(struct msm_fb_data_type *mfd)
-{
-	if (mfd->panel_info.mipi.dsi_phy_db != NULL)
-		mutex_unlock(&mfd->panel_info.mipi.panel_mutex);
-}
-#else
-static void lock_panel_mutex(struct msm_fb_data_type *mfd)
-{
-	/* Stubbed function */
-}
-
-static void unlock_panel_mutex(struct msm_fb_data_type *mfd)
-{
-	/* Stubbed function */
-}
-#endif
 
 #if defined(CONFIG_PM) && !defined(CONFIG_HAS_EARLYSUSPEND)
 static int msm_fb_suspend(struct platform_device *pdev, pm_message_t state)
