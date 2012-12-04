@@ -32,11 +32,8 @@
 #define MSMFB_OVERLAY_SET       _IOWR(MSMFB_IOCTL_MAGIC, 135, \
 						struct mdp_overlay)
 #define MSMFB_OVERLAY_UNSET     _IOW(MSMFB_IOCTL_MAGIC, 136, unsigned int)
-
 #define MSMFB_OVERLAY_PLAY      _IOW(MSMFB_IOCTL_MAGIC, 137, \
 						struct msmfb_overlay_data)
-#define MSMFB_OVERLAY_QUEUE	MSMFB_OVERLAY_PLAY
-
 #define MSMFB_GET_PAGE_PROTECTION _IOR(MSMFB_IOCTL_MAGIC, 138, \
 					struct mdp_page_protection)
 #define MSMFB_SET_PAGE_PROTECTION _IOW(MSMFB_IOCTL_MAGIC, 139, \
@@ -70,6 +67,7 @@
 #define MSMFB_MDP_PP _IOWR(MSMFB_IOCTL_MAGIC, 156, struct msmfb_mdp_pp)
 
 #define MSMFB_OVERLAY_VSYNC_CTRL  _IOW(MSMFB_IOCTL_MAGIC, 160, unsigned int)
+
 
 #define MSMFB_REG_READ		_IOWR(MSMFB_IOCTL_MAGIC, 64, struct msmfb_reg_access)
 #define MSMFB_REG_WRITE	_IOW(MSMFB_IOCTL_MAGIC, 65, struct msmfb_reg_access)
@@ -439,7 +437,6 @@ struct mdp_hist_lut_data {
 	uint32_t len;
 	uint32_t *data;
 };
-
 
 struct mdp_lut_cfg_data {
 	uint32_t lut_type;

@@ -337,7 +337,7 @@ static ssize_t mdp_stat_read(
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "read_ptr: %08lu\n\n",
-					mdp4_stat.intr_rdptr);
+					mdp4_stat.intr_rd_ptr);
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "dsi:\n");
@@ -412,12 +412,8 @@ static ssize_t mdp_stat_read(
 					mdp4_stat.overlay_unset[0]);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "play:  %08lu\t",
+	len = snprintf(bp, dlen, "play:  %08lu\n",
 					mdp4_stat.overlay_play[0]);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "commit:  %08lu\n",
-					mdp4_stat.overlay_commit[0]);
 	bp += len;
 	dlen -= len;
 
@@ -432,56 +428,29 @@ static ssize_t mdp_stat_read(
 					mdp4_stat.overlay_unset[1]);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "play:  %08lu\t",
+	len = snprintf(bp, dlen, "play:  %08lu\n\n",
 					mdp4_stat.overlay_play[1]);
 
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "commit:  %08lu\n\n",
-					mdp4_stat.overlay_commit[1]);
 	bp += len;
 	dlen -= len;
 
 	len = snprintf(bp, dlen, "frame_push:\n");
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "vg1 :   %08lu\t", mdp4_stat.pipe[0]);
+	len = snprintf(bp, dlen, "rgb1:   %08lu\t",
+		       mdp4_stat.pipe[OVERLAY_PIPE_RGB1]);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "vg2 :   %08lu\t", mdp4_stat.pipe[1]);
+	len = snprintf(bp, dlen, "rgb2:   %08lu\n",
+		       mdp4_stat.pipe[OVERLAY_PIPE_RGB2]);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "vg3 :   %08lu\n", mdp4_stat.pipe[5]);
+	len = snprintf(bp, dlen, "vg1 :   %08lu\t",
+		       mdp4_stat.pipe[OVERLAY_PIPE_VG1]);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "rgb1:   %08lu\t", mdp4_stat.pipe[2]);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "rgb2:   %08lu\t", mdp4_stat.pipe[3]);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "rgb3:   %08lu\n\n", mdp4_stat.pipe[4]);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "wait4vsync: ");
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "mixer0 : %08lu\t", mdp4_stat.wait4vsync0);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "mixer1: %08lu\n\n", mdp4_stat.wait4vsync1);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "iommu: ");
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "map : %08lu\t", mdp4_stat.iommu_map);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "unmap: %08lu\t", mdp4_stat.iommu_unmap);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "drop: %08lu\n\n", mdp4_stat.iommu_drop);
+	len = snprintf(bp, dlen, "vg2 :   %08lu\n",
+		       mdp4_stat.pipe[OVERLAY_PIPE_VG2]);
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "err_mixer : %08lu\t", mdp4_stat.err_mixer);
