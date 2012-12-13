@@ -1545,7 +1545,8 @@ int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 	wmb();
 	spin_unlock_irqrestore(&dsi_mdp_lock, flags);
 
-	if (wait_for_completion_timeout(&dsi_dma_comp, msecs_to_jiffies(100))) {
+	if (wait_for_completion_timeout(&dsi_dma_comp,
+                                        msecs_to_jiffies(100)) == 0) {
 		dsi_status2 = MIPI_INP(MIPI_DSI_BASE + 0x04);
 		pr_err("%s: timeout waiting for dsi dma completion "
 			" dsi_status2=0x%x dsi_status2=0x%x\n",
