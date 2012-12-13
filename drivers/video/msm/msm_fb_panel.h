@@ -160,7 +160,7 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 physical_width_mm;
 	__u32 physical_height_mm;
-	__u32 frame_rate;
+
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
