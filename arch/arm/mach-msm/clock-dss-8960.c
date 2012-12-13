@@ -112,11 +112,7 @@ int hdmi_pll_enable(void)
 	writel_relaxed(0x8D, HDMI_PHY_PLL_LOCKDET_CFG2);
 	writel_relaxed(0x10, HDMI_PHY_PLL_LOCKDET_CFG0);
 	writel_relaxed(0x1A, HDMI_PHY_PLL_LOCKDET_CFG1);
-	/* Wait for a short time before de-asserting
-	 * to allow the hardware to complete its job.
-	 * This much of delay should be fine for hardware
-	 * to assert and de-assert.
-	 */
+	/* Wait for a short time before de-asserting */
 	udelay(10);
 	/* De-assert PLL S/W reset */
 	writel_relaxed(0x0D, HDMI_PHY_PLL_LOCKDET_CFG2);
@@ -126,10 +122,7 @@ int hdmi_pll_enable(void)
 	/* Assert PHY S/W reset */
 	writel_relaxed(val, HDMI_PHY_REG_12);
 	val &= ~BIT(5);
-	/* Wait for a short time before de-asserting
-	   to allow the hardware to complete its job.
-	   This much of delay should be fine for hardware
-	   to assert and de-assert. */
+	/* Wait for a short time before de-asserting */
 	udelay(10);
 	/* De-assert PHY S/W reset */
 	writel_relaxed(val, HDMI_PHY_REG_12);
@@ -159,14 +152,12 @@ int hdmi_pll_enable(void)
 			 */
 			writel_relaxed(0x8D, HDMI_PHY_PLL_LOCKDET_CFG2);
 
-			/* Wait for a short time before de-asserting
-			 * to allow the hardware to complete its job.
-			 * This much of delay should be fine for hardware
-			 * to assert and de-assert.
+			/*
+			 * Wait for a short time before
+			 * De-asserting PLL S/W reset
 			 */
 			udelay(10);
 			writel_relaxed(0x0D, HDMI_PHY_PLL_LOCKDET_CFG2);
-
 			/*
 			 * Wait for a short duration for the PLL calibration
 			 * before checking if the PLL gets locked
@@ -175,6 +166,12 @@ int hdmi_pll_enable(void)
 
 			timeout_count = 1000;
 			pll_lock_retry--;
+
+			pr_info("%s: HDMI PLL not locked after %d iterations. "
+				"Asserting a PLL S/W reset before trying again",
+				__func__, timeout_count);
+		} else {
+			udelay(10);
 		}
 	}
 
