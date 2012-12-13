@@ -95,7 +95,8 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 #endif
 
 /* Note: must be multiple of 4096 */
-#define MSM_FB_SIZE roundup(MSM_FB_PRIM_BUF_SIZE, 4096)
+#define MSM_FB_SIZE roundup(MSM_FB_PRIM_BUF_SIZE + \
+			MSM_FB_EXT_BUF_SIZE + MSM_FB_WRITEBACK_BUF_SIZE, 4096)
 
 #ifdef CONFIG_I2C
 

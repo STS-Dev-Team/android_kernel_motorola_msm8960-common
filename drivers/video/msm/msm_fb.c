@@ -1350,6 +1350,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 
 	fix->line_length = msm_fb_line_length(mfd->index, panel_info->xres,
 					      bpp);
+	/* calculate smem_len based on max size of two supplied modes */
 
 	fb_size  = (msm_fb_line_length(mfd->index, panel_info->xres, bpp) *
 			(panel_info->yres + msm_fb_pdata->fb_ypad) *
@@ -1358,6 +1359,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			(panel_info->mode2_yres + msm_fb_pdata->fb_ypad) *
 			mfd->fb_page);
 
+	fix->smem_len = roundup(MAX(fb_size, fb_esize), PAGE_SIZE);
 	var->yoffset = (panel_info->yres + msm_fb_pdata->fb_ypad);
 
 	/*
