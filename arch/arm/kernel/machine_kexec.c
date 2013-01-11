@@ -113,6 +113,7 @@ EXPORT_SYMBOL(machine_shutdown);
 
 void machine_crash_nonpanic_core(void *unused)
 {
+#if 0
 	struct pt_regs regs;
 
 	crash_setup_regs(&regs, NULL);
@@ -124,10 +125,12 @@ void machine_crash_nonpanic_core(void *unused)
 	atomic_dec(&waiting_for_crash_ipi);
 	while (1)
 		cpu_relax();
+#endif
 }
 
 void machine_crash_shutdown(struct pt_regs *regs)
 {
+#if 0
 	unsigned long msecs;
 
 	local_irq_disable();
@@ -145,6 +148,7 @@ void machine_crash_shutdown(struct pt_regs *regs)
 	crash_save_cpu(regs, smp_processor_id());
 
 	printk(KERN_INFO "Loading crashdump kernel...\n");
+#endif
 }
 
 /*
