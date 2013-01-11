@@ -35,6 +35,7 @@
 #include <linux/swap.h>
 #include <linux/kmsg_dump.h>
 #include <linux/syscore_ops.h>
+#include <linux/kallsyms.h>
 
 #include <asm/page.h>
 #include <asm/uaccess.h>
@@ -50,6 +51,9 @@ static unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
 u32 vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4];
 size_t vmcoreinfo_size;
 size_t vmcoreinfo_max_size = sizeof(vmcoreinfo_data);
+
+/* lookup functions */
+void (*kernel_restart_prepare_ptr)(char *);
 
 /* Location of the reserved area for the crash kernel */
 struct resource crashk_res = {
@@ -1546,7 +1550,7 @@ int kernel_kexec(void)
 	} else
 #endif
 	{
-		kernel_restart_prepare(NULL);
+		kernel_restart_prepare_ptr(NULL);
 		printk(KERN_EMERG "Starting new kernel\n");
 		machine_shutdown();
 	}
@@ -1577,5 +1581,56 @@ int kernel_kexec(void)
 	return error;
 }
 EXPORT_SYMBOL(kernel_kexec);
+
+/**
+ *	kernel_kexec - reboot the system
+ *
+ *	Move into place and start executing a preloaded standalone
+ *	executable.  If nothing was preloaded return an error.
+ */
+asmlinkage long sys_do_kexec(int magic1, int magic2, unsigned int cmd,
+			     void __user *arg)
+{
+	struct kimage *image;
+	image = xchg(&kexec_image, NULL);
+	if (!image)
+		return -1;
+
+	/* Disable preemption */
+	preempt_disable();
+
+	/* Disable interrupts first */
+	local_irq_disable();
+	local_fiq_disable();
+
+	kernel_restart_prepare_ptr(NULL);
+	machine_shutdown();
+	machine_kexec(image);
+
+	return -1;
+}
+
+static int __init kexec_init(void)
+{
+	unsigned long *sys_call_table_ptr = (void *)kallsyms_lookup_name("sys_call_table");
+
+	kernel_restart_prepare_ptr = (void *)kallsyms_lookup_name("kernel_restart_prepare");
+
+	if (!sys_call_table_ptr || !kernel_restart_prepare_ptr) {
+		return -1;
+	}
+
+	sys_call_table_ptr[__NR_kexec_load] = (unsigned long)sys_kexec_load;
+	sys_call_table_ptr[__NR_reboot] = (unsigned long)sys_do_kexec;
+
+	return 0;
+}
+
+static void __exit kexec_exit(void)
+{
+}
+
+module_init(kexec_init)
+module_exit(kexec_exit);
 
 MODULE_LICENSE("GPL");
