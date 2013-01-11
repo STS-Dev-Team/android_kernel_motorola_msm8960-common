@@ -8,6 +8,8 @@
 #include <linux/delay.h>
 #include <linux/reboot.h>
 #include <linux/io.h>
+#include <linux/kallsyms.h>
+
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/mmu_context.h>
@@ -17,7 +19,8 @@
 extern const unsigned char relocate_new_kernel[];
 extern const unsigned int relocate_new_kernel_size;
 
-extern void setup_mm_for_reboot(char mode);
+//extern void setup_mm_for_reboot(char mode);
+static void (*kexec_setup_mm_for_reboot)(char mode);
 
 extern unsigned long kexec_start_address;
 extern unsigned long kexec_indirection_page;
@@ -53,7 +56,7 @@ static void __soft_restart(void *addr)
 
 	/* Take out a flat memory mapping. */
 	// Add the unused "mode" for 3.0 kernel
-	setup_mm_for_reboot(0);
+	kexec_setup_mm_for_reboot(0);
 
 	/* Clean and invalidate caches */
 	flush_cache_all();
@@ -75,6 +78,7 @@ static void __soft_restart(void *addr)
 void soft_restart(unsigned long addr)
 {
 	u64 *stack = soft_restart_stack + ARRAY_SIZE(soft_restart_stack);
+	kexec_setup_mm_for_reboot = (void *)kallsyms_lookup_name("setup_mm_for_reboot");
 
 	/* Disable interrupts first */
 	local_irq_disable();
