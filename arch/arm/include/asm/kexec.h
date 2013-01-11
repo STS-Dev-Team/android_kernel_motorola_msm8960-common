@@ -1,7 +1,7 @@
 #ifndef _ARM_KEXEC_H
 #define _ARM_KEXEC_H
 
-#ifdef CONFIG_KEXEC
+//#ifdef CONFIG_KEXEC
 
 /* Maximum physical address we can use pages from */
 #define KEXEC_SOURCE_MEMORY_LIMIT (-1UL)
@@ -55,6 +55,6 @@ extern void (*kexec_reinit)(void);
 
 #endif /* __ASSEMBLY__ */
 
-#endif /* CONFIG_KEXEC */
+//#endif /* CONFIG_KEXEC */
 
 #endif /* _ARM_KEXEC_H */
