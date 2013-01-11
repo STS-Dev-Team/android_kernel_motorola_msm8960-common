@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/module.h>
 #include <linux/kexec.h>
 #include <linux/io.h>
 
@@ -28,3 +29,5 @@ void arch_kexec(void)
 #endif
 	return;
 }
+
+MODULE_LICENSE("GPL");
