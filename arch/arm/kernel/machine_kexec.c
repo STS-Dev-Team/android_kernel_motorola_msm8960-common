@@ -23,6 +23,70 @@ extern unsigned long kexec_indirection_page;
 extern unsigned long kexec_mach_type;
 extern unsigned long kexec_boot_atags;
 
+/* Using cleaned up kexec code from 3.4 kernel here:
+ * [arch/arm/kernel/ process.c]
+ * http://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=blob_plain;f=arch/arm/kernel/ process.c;h=48f36246a5d7a2c07715dee19f034a49934da8bc;hb=0ba1cd8da86b7c4717852e786bacc7154b62d95c
+ * and
+ * [arch/arm/kernel/machine_kexec.c]
+ * http://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=blob;f=arch/arm/kernel/machine_kexec.c;h=dfcdb9f7c1261143f93c31846ed372269a4b4783;hb=0ba1cd8da86b7c4717852e786bacc7154b62d95c
+ */
+
+extern void call_with_stack(void (*fn)(void *), void *arg, void *sp);
+typedef void (*phys_reset_t)(unsigned long);
+
+/*
+ * A temporary stack to use for CPU reset. This is static so that we
+ * don't clobber it with the identity mapping. When running with this
+ * stack, any references to the current task *will not work* so you
+ * should really do as little as possible before jumping to your reset
+ * code.
+ */
+static u64 soft_restart_stack[16];
+
+static void __soft_restart(void *addr)
+{
+	phys_reset_t phys_reset;
+
+	/* Take out a flat memory mapping. */
+	// Add the unused "mode" for 3.0 kernel
+	setup_mm_for_reboot(0);
+
+	/* Clean and invalidate caches */
+	flush_cache_all();
+
+	/* Turn off caching */
+	cpu_proc_fin();
+
+	/* Push out any further dirty data, and ensure cache is empty */
+	flush_cache_all();
+
+	/* Switch to the identity mapping. */
+	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(cpu_reset);
+	phys_reset((unsigned long)addr);
+
+	/* Should never get here. */
+	BUG();
+}
+
+void soft_restart(unsigned long addr)
+{
+	u64 *stack = soft_restart_stack + ARRAY_SIZE(soft_restart_stack);
+
+	/* Disable interrupts first */
+	local_irq_disable();
+	local_fiq_disable();
+
+	/* Disable the L2 if we're the last man standing. */
+	if (num_online_cpus() == 1)
+		outer_disable();
+
+	/* Change to the new stack and continue with the reset. */
+	call_with_stack(__soft_restart, (void *)addr, (void *)stack);
+
+	/* Should never get here. */
+	BUG();
+}
+
 static atomic_t waiting_for_crash_ipi;
 
 /*
@@ -112,6 +176,8 @@ void machine_kexec(struct kimage *image)
 
 	if (kexec_reinit)
 		kexec_reinit();
+	soft_restart(reboot_code_buffer_phys);
+#if 0
 	local_irq_disable();
 	local_fiq_disable();
 	setup_mm_for_reboot(0); /* mode is not used, so just pass 0*/
@@ -122,4 +188,5 @@ void machine_kexec(struct kimage *image)
 	outer_inv_all();
 	flush_cache_all();
 	__virt_to_phys(cpu_reset)(reboot_code_buffer_phys);
+#endif
 }
