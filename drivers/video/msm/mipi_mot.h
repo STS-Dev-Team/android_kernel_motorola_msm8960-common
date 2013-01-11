@@ -61,6 +61,7 @@
 #define DCS_CMD_RDDSDR               0x0F
 
 #define INVALID_VALUE   -1
+#define VALID_PWR_MODE 0x90
 
 /* ESD spec require 10ms, select 8ms */
 #define MOT_PANEL_ESD_CHECK_PERIOD   msecs_to_jiffies(8000)
@@ -115,6 +116,7 @@ struct mipi_mot_panel {
 	u16 (*get_controller_drv_ver)(struct msm_fb_data_type *mfd);
 	void (*enable_acl)(struct msm_fb_data_type *mfd);
 	int (*is_valid_manufacture_id)(struct msm_fb_data_type *mfd, u8 id);
+	int (*is_valid_power_mode)(struct msm_fb_data_type *mfd);
 };
 
 int mipi_mot_device_register(struct msm_panel_info *pinfo, u32 channel,

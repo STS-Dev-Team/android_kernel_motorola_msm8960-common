@@ -55,9 +55,7 @@ int mipi_mot_panel_on(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *tp = mot_panel->mot_tx_buf;
 
-//	mdp4_dsi_cmd_dma_busy_wait(mfd);
-	mipi_dsi_mdp_busy_wait(mfd);
-
+	mipi_mot_mipi_busy_wait(mfd);
 	mipi_dsi_buf_init(tp);
 	mipi_dsi_cmds_tx(tp, &mot_display_on_cmd, 1);
 
@@ -68,9 +66,7 @@ int mipi_mot_panel_off(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *tp = mot_panel->mot_tx_buf;
 
-//	mdp4_dsi_cmd_dma_busy_wait(mfd);
-	mipi_dsi_mdp_busy_wait(mfd);
-
+	mipi_mot_mipi_busy_wait(mfd);
 	mipi_dsi_buf_init(tp);
 	mipi_dsi_cmds_tx(tp, &mot_display_off_cmd, 1);
 
