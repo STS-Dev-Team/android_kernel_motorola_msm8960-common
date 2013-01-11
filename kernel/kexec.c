@@ -6,6 +6,7 @@
  * Version 2.  See the file COPYING for more details.
  */
 
+#include <linux/module.h>
 #include <linux/capability.h>
 #include <linux/mm.h>
 #include <linux/file.h>
@@ -58,12 +59,14 @@ struct resource crashk_res = {
 	.flags = IORESOURCE_BUSY | IORESOURCE_MEM
 };
 
+#ifdef CONFIG_KEXEC
 int kexec_should_crash(struct task_struct *p)
 {
 	if (in_interrupt() || !p->pid || is_global_init(p) || panic_on_oops)
 		return 1;
 	return 0;
 }
+#endif
 
 /*
  * When kexec transitions to the new kernel there is a one-to-one
@@ -1065,6 +1068,7 @@ asmlinkage long compat_sys_kexec_load(unsigned long entry,
 }
 #endif
 
+#ifdef CONFIG_KEXEC
 void crash_kexec(struct pt_regs *regs)
 {
 	/* Take the kexec_mutex here to prevent sys_kexec_load
@@ -1089,6 +1093,7 @@ void crash_kexec(struct pt_regs *regs)
 		mutex_unlock(&kexec_mutex);
 	}
 }
+#endif
 
 size_t crash_get_memory_size(void)
 {
@@ -1202,6 +1207,7 @@ void crash_save_cpu(struct pt_regs *regs, int cpu)
 	final_note(buf);
 }
 
+#if 0
 static int __init crash_notes_memory_init(void)
 {
 	/* Allocate memory for saving cpu registers. */
@@ -1214,6 +1220,7 @@ static int __init crash_notes_memory_init(void)
 	return 0;
 }
 module_init(crash_notes_memory_init)
+#endif
 
 
 /*
@@ -1428,6 +1435,7 @@ unsigned long __attribute__ ((weak)) paddr_vmcoreinfo_note(void)
 	return __pa((unsigned long)(char *)&vmcoreinfo_note);
 }
 
+#if 0
 static int __init crash_save_vmcoreinfo_init(void)
 {
 	VMCOREINFO_OSRELEASE(init_uts_ns.name.release);
@@ -1488,6 +1496,7 @@ static int __init crash_save_vmcoreinfo_init(void)
 }
 
 module_init(crash_save_vmcoreinfo_init)
+#endif
 
 /*
  * Move into place and start executing a preloaded standalone
@@ -1567,3 +1576,6 @@ int kernel_kexec(void)
 	mutex_unlock(&kexec_mutex);
 	return error;
 }
+EXPORT_SYMBOL(kernel_kexec);
+
+MODULE_LICENSE("GPL");
