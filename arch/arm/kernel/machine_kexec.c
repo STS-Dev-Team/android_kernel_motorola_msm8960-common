@@ -2,6 +2,7 @@
  * machine_kexec.c - handle transition of Linux booting another kernel
  */
 
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/kexec.h>
 #include <linux/delay.h>
@@ -98,10 +99,17 @@ int machine_kexec_prepare(struct kimage *image)
 {
 	return 0;
 }
+EXPORT_SYMBOL(machine_kexec_prepare);
 
 void machine_kexec_cleanup(struct kimage *image)
 {
 }
+EXPORT_SYMBOL(machine_kexec_cleanup);
+
+void machine_shutdown(void)
+{
+}
+EXPORT_SYMBOL(machine_shutdown);
 
 void machine_crash_nonpanic_core(void *unused)
 {
@@ -190,3 +198,6 @@ void machine_kexec(struct kimage *image)
 	__virt_to_phys(cpu_reset)(reboot_code_buffer_phys);
 #endif
 }
+EXPORT_SYMBOL(machine_kexec);
+
+MODULE_LICENSE("GPL");
