@@ -24,6 +24,9 @@ extern unsigned long kexec_indirection_page;
 extern unsigned long kexec_mach_type;
 extern unsigned long kexec_boot_atags;
 
+void kexec_cpu_v7_proc_fin(void);
+void kexec_cpu_v7_reset(void);
+
 /* Using cleaned up kexec code from 3.4 kernel here:
  * [arch/arm/kernel/ process.c]
  * http://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=blob_plain;f=arch/arm/kernel/ process.c;h=48f36246a5d7a2c07715dee19f034a49934da8bc;hb=0ba1cd8da86b7c4717852e786bacc7154b62d95c
@@ -56,13 +59,13 @@ static void __soft_restart(void *addr)
 	flush_cache_all();
 
 	/* Turn off caching */
-	cpu_proc_fin();
+	kexec_cpu_v7_proc_fin();
 
 	/* Push out any further dirty data, and ensure cache is empty */
 	flush_cache_all();
 
 	/* Switch to the identity mapping. */
-	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(cpu_reset);
+	phys_reset = (phys_reset_t)(unsigned long)virt_to_phys(kexec_cpu_v7_reset);
 	phys_reset((unsigned long)addr);
 
 	/* Should never get here. */
